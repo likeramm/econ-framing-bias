@@ -1,4 +1,4 @@
-# 📊 경제 뉴스 프레이밍 편향 탐지기 + 주가 영향 분석
+# 경제 뉴스 프레이밍 편향 탐지기 + 주가 영향 분석
 
 > Detecting framing bias in Korean economic news and analyzing its impact on stock prices
 
@@ -11,30 +11,17 @@
 - **RQ3:** 부정적 프레이밍의 집중도가 높을수록 관련 섹터 주가 하락 폭이 큰가?
 - **RQ4:** 미디어 프레이밍이 소비심리지수(CCSI) 변화를 매개하여 주가에 영향을 미치는가?
 
-## 분석 파이프라인
-
-```
-경제 지표 발표 (GDP, 금리, 고용률 등)
-       ↓
-언론사별 기사 수집 (10개 언론사)
-       ↓
-프레이밍 분류 & 편향 점수 산출
-       ↓
-주가 반응 분석 (CAR) + 소비심리지수 상관분석
-       ↓
-"미디어 프레이밍 → 시장 심리 → 주가" 인과 경로 검증
-```
-
 ## 기술 스택
 
 | 영역 | 기술 |
 |------|------|
-| 데이터 수집 | BeautifulSoup, ECOS API, pykrx, FinanceDataReader |
+| Frontend | React |
+| Backend | Django REST Framework |
+| 데이터 수집 | BeautifulSoup, ECOS API, pykrx |
 | 프레이밍 분류 | KLUE-RoBERTa-large (Fine-tuned) |
 | 감성 분석 | KcELECTRA-base |
-| 키워드 추출 | KeyBERT (Korean) |
 | 통계 분석 | statsmodels, linearmodels, pingouin |
-| 시각화 | Plotly, Streamlit |
+| 배포 | AWS EC2 |
 
 ## 프레이밍 유형 (6가지)
 
@@ -51,45 +38,53 @@
 
 ```
 econ-framing-bias/
-├── config/                    # 설정 파일
-│   ├── media_list.yaml        # 분석 대상 언론사 목록
-│   └── event_sector_map.yaml  # 이벤트-섹터 매핑
-├── data/                      # 데이터 (Git 미포함)
-│   ├── raw/
-│   ├── processed/
-│   └── labeled/
-├── src/
-│   ├── collection/            # 데이터 수집
-│   ├── preprocessing/         # 전처리
-│   ├── models/                # NLP 모델
-│   ├── analysis/              # 통계 분석
-│   └── visualization/         # 대시보드
-├── notebooks/                 # 분석 노트북
+├── backend/                     # Django REST API
+│   ├── config/                  # Django 설정
+│   └── api/                     # API 앱 (모델, 뷰, 시리얼라이저)
+├── frontend/                    # React 앱
+│   └── src/
+│       ├── pages/               # 페이지 컴포넌트
+│       └── api.js               # API 클라이언트
+├── src/                         # ML/분석 모듈
+│   ├── collection/              # 데이터 수집 (크롤러, API)
+│   ├── preprocessing/           # 텍스트 전처리
+│   ├── models/                  # NLP 모델
+│   └── analysis/                # 통계 분석
+├── config/                      # 설정 파일
+├── data/                        # 데이터 (Git 미포함)
+├── notebooks/                   # 분석 노트북
 └── tests/
 ```
 
 ## 설치 및 실행
 
-```bash
-# 가상환경 생성
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+### Backend (Django)
 
+```bash
 # 패키지 설치
 pip install -r requirements.txt
 
 # 환경변수 설정
 cp .env.example .env
-# .env 파일에 ECOS API 키 입력
 
-# 대시보드 실행
-streamlit run src/visualization/dashboard.py
+# DB 마이그레이션 & 서버 실행
+cd backend
+python manage.py migrate
+python manage.py runserver
+```
+
+### Frontend (React)
+
+```bash
+cd frontend
+npm install
+npm start
 ```
 
 ## 개발 로드맵
 
 - [ ] **Phase 1** — 데이터 기반 구축 (뉴스 크롤러, ECOS API, 주가 수집)
-- [ ] **Phase 2** — 프레이밍 분류 모델 (KLUE-RoBERTa Fine-tuning, F1 ≥ 0.80)
+- [ ] **Phase 2** — 프레이밍 분류 모델 (KLUE-RoBERTa Fine-tuning, F1 >= 0.80)
 - [ ] **Phase 3** — 주가 상관분석 (이벤트 스터디, 그랜저 인과관계, 매개 분석)
-- [ ] **Phase 4** — 시각화 & 대시보드 (Streamlit 배포)
-- [ ] **Phase 5** — 논문화 & 고도화
+- [ ] **Phase 4** — 시각화 & 대시보드 (React + Django)
+- [ ] **Phase 5** — 배포 (AWS EC2) & 논문화
