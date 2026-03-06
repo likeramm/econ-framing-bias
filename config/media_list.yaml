@@ -1,0 +1,41 @@
+# 분석 대상 언론사 목록
+# 정치 성향 분류는 참고용이며, 분석 결과로 검증 예정
+
+media:
+  # 보수 성향
+  - name: 조선일보
+    code: "023"
+    category: conservative
+  - name: 중앙일보
+    code: "025"
+    category: conservative
+  - name: 동아일보
+    code: "020"
+    category: conservative
+
+  # 진보 성향
+  - name: 한겨레
+    code: "028"
+    category: progressive
+  - name: 경향신문
+    code: "032"
+    category: progressive
+
+  # 경제지
+  - name: 한국경제
+    code: "015"
+    category: economic
+  - name: 매일경제
+    code: "009"
+    category: economic
+  - name: 서울경제
+    code: "011"
+    category: economic
+
+  # 통신사 / 중도
+  - name: 연합뉴스
+    code: "001"
+    category: neutral
+  - name: SBS
+    code: "055"
+    category: neutral

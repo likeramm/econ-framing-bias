@@ -1,0 +1,36 @@
+# ===== Data Collection =====
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+pykrx>=1.0.44
+finance-datareader>=0.9.66
+pyyaml>=6.0.1
+
+# ===== NLP / Deep Learning =====
+torch>=2.0.0
+transformers>=4.35.0
+datasets>=2.15.0
+sentence-transformers>=2.2.2
+keybert>=0.8.3
+konlpy>=0.6.0
+soynlp>=0.0.493
+
+# ===== Data Analysis =====
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.11.0
+statsmodels>=0.14.0
+linearmodels>=5.3
+pingouin>=0.5.3
+scikit-learn>=1.3.0
+
+# ===== Visualization =====
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.18.0
+streamlit>=1.28.0
+
+# ===== Utilities =====
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+jupyter>=1.0.0
+ipykernel>=6.25.0

@@ -1,0 +1,47 @@
+# 경제 이벤트 → 관련 섹터/ETF 매핑
+
+event_sector_map:
+  GDP_성장률:
+    - KOSPI
+    - KODEX200
+  기준금리:
+    - 은행
+    - 보험
+    - 건설
+    - 부동산
+  소비자물가:
+    - 유통
+    - 식품
+    - 내수소비
+  수출입동향:
+    - 반도체
+    - 자동차
+    - 조선
+  고용동향:
+    - 서비스
+    - 내수소비
+  부동산가격:
+    - 건설
+    - 부동산
+    - 은행
+
+# 이벤트 스터디 윈도우 설정
+event_study:
+  estimation_window: [-120, -11]   # 정상 수익률 추정 기간
+  event_window: [-10, 10]          # 이벤트 윈도우
+  car_window: [-1, 5]             # CAR 측정 구간
+
+# 프레이밍 유형 분류
+framing_types:
+  - optimistic      # 낙관적
+  - pessimistic     # 비관적
+  - alarmist        # 경고적
+  - defensive       # 방어적
+  - comparative     # 비교적
+  - neutral         # 중립적
+
+# 편향 점수 가중치
+bias_weights:
+  framing_type: 0.4    # α
+  sentiment: 0.35      # β
+  keyword_polarity: 0.25  # γ
