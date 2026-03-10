@@ -48,12 +48,23 @@ MEDIA_META = {
 
 # 경제 이벤트-섹터 매핑
 EVENT_SECTOR_MAP = {
+    # 기존 6개
     "GDP_성장률": ["KOSPI", "KODEX200"],
     "기준금리": ["은행", "보험", "건설", "부동산"],
     "소비자물가": ["유통", "식품", "내수소비"],
     "수출입동향": ["반도체", "자동차", "조선"],
     "고용동향": ["서비스", "내수소비"],
     "부동산가격": ["건설", "부동산", "은행"],
+    # 신규 9개
+    "환율_달러": ["반도체", "자동차", "조선", "KOSPI"],
+    "반도체_수출": ["반도체", "KOSPI", "KODEX200"],
+    "가계부채": ["은행", "부동산", "내수소비"],
+    "경상수지": ["반도체", "자동차", "KOSPI"],
+    "국채_금리": ["은행", "보험", "건설"],
+    "물가_인상": ["유통", "식품", "내수소비"],
+    "경기침체": ["KOSPI", "KODEX200", "내수소비"],
+    "부동산_대출": ["건설", "부동산", "은행"],
+    "최저임금": ["서비스", "내수소비", "유통"],
 }
 
 # 텍스트 정제 패턴
@@ -138,10 +149,25 @@ def build_dataset():
     print("\n[1/5] 원본 CSV 통합 중...")
     dfs = []
     for f in sorted(RAW_DIR.glob("*.csv")):
-        df = pd.read_csv(f)
-        df["event_type"] = f.stem  # 파일명 = 경제 이벤트 유형
+        if f.stat().st_size < 10:
+            continue
+        try:
+            df = pd.read_csv(f)
+        except Exception:
+            continue
+        if df.empty:
+            continue
+        # 파일명에서 event_type 추출
+        # 새 형식: "키워드__시작일_종료일.csv" → "키워드" 부분만 추출
+        # 구 형식: "키워드.csv" → 그대로 사용
+        stem = f.stem
+        if "__" in stem:
+            event_type = stem.split("__")[0]
+        else:
+            event_type = stem
+        df["event_type"] = event_type
         dfs.append(df)
-        print(f"  {f.stem}: {len(df)}건")
+        print(f"  {stem}: {len(df)}건")
 
     raw_df = pd.concat(dfs, ignore_index=True)
     print(f"  → 통합: {len(raw_df)}건")
