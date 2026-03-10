@@ -25,11 +25,9 @@ class NewsCrawler:
         self.media_list = config["media"]
         self.target_media_names = {m["name"] for m in self.media_list}
         self.delay = delay
+        self.headless = headless
         self.driver = self._init_driver(headless)
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": self.driver.execute_script("return navigator.userAgent")
-        })
+        self._sync_session()
 
     def _init_driver(self, headless: bool) -> webdriver.Chrome:
         options = Options()
@@ -45,6 +43,23 @@ class NewsCrawler:
         driver = webdriver.Chrome(service=service, options=options)
         driver.implicitly_wait(5)
         return driver
+
+    def _sync_session(self):
+        """requests 세션의 User-Agent를 WebDriver와 동기화"""
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": self.driver.execute_script("return navigator.userAgent")
+        })
+
+    def refresh_driver(self):
+        """WebDriver를 재시작하여 세션 만료/메모리 누수 방지"""
+        try:
+            self.driver.quit()
+        except Exception:
+            pass
+        self.driver = self._init_driver(self.headless)
+        self._sync_session()
+        print("  [WebDriver 재시작 완료]")
 
     def _is_target_media(self, media_name: str) -> bool:
         """수집 대상 언론사인지 확인 (부분 매칭 포함)"""
@@ -71,6 +86,7 @@ class NewsCrawler:
         ds = start_date.replace(".", "")
         de = end_date.replace(".", "")
         all_articles = []
+        retries = 0
 
         for page in range(max_pages):
             start = page * 10 + 1
@@ -91,10 +107,20 @@ class NewsCrawler:
                 items = soup.select(".fds-news-item-list-tab > div")
 
                 if not items:
+                    # 초반 페이지에서 빈 결과 → 일시적 차단 가능성
+                    if page < 5:
+                        retries += 1
+                        if retries <= 2:
+                            print(f"    페이지 {page + 1}: 빈 결과, {10}초 대기 후 재시도...")
+                            time.sleep(10)
+                            continue
                     print(f"    페이지 {page + 1}: 결과 없음, 종료")
                     break
 
+                # 성공 시 재시도 카운터 리셋
+                retries = 0
                 page_count = 0
+
                 for item in items:
                     title_tag = item.select_one('a[data-heatmap-target=".tit"]')
                     if not title_tag:
@@ -137,8 +163,14 @@ class NewsCrawler:
                 print(f"    페이지 {page + 1}: {page_count}건")
 
             except Exception as e:
+                retries += 1
                 print(f"    페이지 {page + 1} 오류: {e}")
-                break
+                if retries >= 3:
+                    print(f"    연속 3회 오류, 이 키워드 종료")
+                    break
+                print(f"    5초 대기 후 재시도...")
+                time.sleep(5)
+                continue
 
         df = pd.DataFrame(all_articles)
         if df.empty:
