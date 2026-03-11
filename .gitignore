@@ -20,12 +20,15 @@ env/
 data/labeled/
 data/raw_backup_v1/
 
-# Model Checkpoints
+# Model Checkpoints & Weights
 *.pt
 *.pth
 *.bin
 *.ckpt
-models/checkpoints/
+*.safetensors
+models/*/checkpoint-*/
+models/*/best/model.safetensors
+models/*/best/training_args.bin
 
 # Jupyter
 .ipynb_checkpoints/
