@@ -26,6 +26,7 @@ data/raw_backup_v1/
 *.bin
 *.ckpt
 *.safetensors
+*.zip
 models/*/checkpoint-*/
 models/*/best/model.safetensors
 models/*/best/training_args.bin
