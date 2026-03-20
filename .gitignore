@@ -49,6 +49,9 @@ frontend/build/
 *.swo
 *~
 
+# Temp
+.docx-build/
+
 # OS
 .DS_Store
 Thumbs.db
