@@ -1,6 +1,6 @@
-# NLP 기반 경제뉴스 프레이밍 편향이 주가에 미치는 영향 분석 시스템
+# NLP기반 경제 뉴스 프레이밍 편향 탐지 및 주가 영향 분석 시스템
 
-> Analyzing the Impact of Economic News Framing Bias on Stock Prices Using NLP
+> Economic News Framing Bias Detection and Stock Price Impact Analysis System Using NLP
 
 한국은행이 "GDP 성장률 2.3%"를 발표하면, 어떤 언론은 **"견조한 성장세 지속"**, 다른 언론은 **"성장 둔화 우려 확대"**로 보도합니다. 본 프로젝트는 이러한 **프레이밍 편향**을 NLP 모델로 자동 탐지하고, 편향이 실제 주가에 미치는 인과적 영향을 통계적으로 검증합니다.
 
