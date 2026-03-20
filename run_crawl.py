@@ -1,6 +1,6 @@
-"""전체 경제 키워드 크롤링 스크립트 (5년 확장)
+"""전체 경제 키워드 크롤링 스크립트 (10년 확장)
 
-15개 키워드 × 10개 기간 구간 = 150 배치
+15개 키워드 × 20개 기간 구간 = 300 배치
 이미 존재하는 CSV는 건너뛰어 중단 후 재시작 가능
 """
 
@@ -37,8 +37,20 @@ KEYWORDS = [
     "최저임금",
 ]
 
-# 5년을 6개월 단위로 분할 (네이버 검색 결과 제한 회피)
+# 10년을 6개월 단위로 분할 (네이버 검색 결과 제한 회피)
 DATE_SEGMENTS = [
+    # 2016~2021 (신규 확장)
+    ("2016.03.06", "2016.09.05"),
+    ("2016.09.06", "2017.03.05"),
+    ("2017.03.06", "2017.09.05"),
+    ("2017.09.06", "2018.03.05"),
+    ("2018.03.06", "2018.09.05"),
+    ("2018.09.06", "2019.03.05"),
+    ("2019.03.06", "2019.09.05"),
+    ("2019.09.06", "2020.03.05"),
+    ("2020.03.06", "2020.09.05"),
+    ("2020.09.06", "2021.03.05"),
+    # 2021~2026 (기존)
     ("2021.03.06", "2021.09.05"),
     ("2021.09.06", "2022.03.05"),
     ("2022.03.06", "2022.09.05"),
@@ -52,7 +64,7 @@ DATE_SEGMENTS = [
 ]
 
 MAX_PAGES = 50  # 페이지당 10건 → 구간당 최대 500건
-DRIVER_REFRESH_INTERVAL = 10  # 10배치마다 WebDriver 재시작
+DRIVER_REFRESH_INTERVAL = 8  # 8배치마다 WebDriver 재시작 (차단 방지)
 OUTPUT_DIR = Path("data/raw")
 
 
@@ -68,7 +80,7 @@ def main():
     total_batches = len(KEYWORDS) * len(DATE_SEGMENTS)
     estimated_minutes = total_batches * 2
     print("=" * 60)
-    print("확장 크롤링 시작 (5년, 15개 키워드)")
+    print("확장 크롤링 시작 (10년, 15개 키워드)")
     print("=" * 60)
     print(f"  키워드: {len(KEYWORDS)}개")
     print(f"  기간 구간: {len(DATE_SEGMENTS)}개 (6개월 단위)")
@@ -76,7 +88,7 @@ def main():
     print(f"  예상 소요시간: ~{estimated_minutes // 60}시간 {estimated_minutes % 60}분")
     print("=" * 60)
 
-    crawler = NewsCrawler(delay=1.5, headless=True)
+    crawler = NewsCrawler(delay=2.0, headless=True)
     batch_count = 0
     actual_runs = 0
     total_articles = 0
