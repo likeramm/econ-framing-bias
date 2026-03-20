@@ -52,17 +52,20 @@ ALARMIST_PATTERNS = [
 ]
 
 DEFENSIVE_PATTERNS = [
-    # "~에도 불구하고", "우려이나 ~"
-    r"불구.*(?:성장|반등|회복|양호|선방|견조)",
-    r"우려.*(?:선방|양호|견조|회복|극복)",
-    r"(?:어렵|힘들|악화).*(?:버텨|버텼|선방|극복|견뎌)",
+    # "~에도 불구하고" 구문 (핵심)
+    r"에도\s*불구",
+    r"에도.*(?:성장|양호|선방|견조|반등|회복|유지|방어|버텨|증가|상승|개선|호조)",
+    r"속에서도",
+    # 부정 상황 + 긍정 결과
+    r"(?:우려|위기|침체|둔화|부진|악화|역풍|악재|리스크|불확실|불안).*(?:선방|양호|견조|회복|극복|버텨|견뎌|방어|유지|반등)",
+    r"(?:어렵|힘들|악화|어려운).*(?:버텨|버텼|선방|극복|견뎌|이겨)",
     r"(?:위기|우려).*(?:기회|전환점|반전)",
-    r"역풍.*(?:속|에도).*(?:성장|회복)",
-    r"(?:불확실|불안).*(?:속|에도).*(?:견조|양호)",
-    r"악재.*(?:속|에도).*(?:선방|반등)",
-    r"(?:코로나|팬데믹).*(?:회복|극복)",
+    r"(?:코로나|팬데믹|전쟁|갈등).*(?:회복|극복|선방)",
     r"(?:위기|난관).*(?:돌파|극복|타개)",
-    r"꾸역꾸역", r"버텨", r"선방했", r"견뎌",
+    # 역접 + 긍정 결과 키워드
+    r"꾸역꾸역", r"버텨냈", r"선방했", r"견뎌냈", r"꿋꿋",
+    r"저력", r"뚫고", r"딛고", r"이겨내",
+    r"(?:하락|감소|위축).*(?:에도|속).*(?:상승|증가|회복|반등)",
 ]
 
 COMPARATIVE_PATTERNS = [
@@ -79,13 +82,17 @@ COMPARATIVE_PATTERNS = [
 ]
 
 NEUTRAL_PATTERNS = [
-    # 사실 보도
-    r"(?:기록|집계|발표|보고)$",
-    r"^\d+.*%\s*(?:기록|집계|발표)",
-    r"(?:한국은행|한은|기재부|통계청).*(?:발표|집계|보고)",
-    r"(?:전망치|예상치|컨센서스).*(?:부합|일치)",
-    r"(?:보합|횡보|유지)",
-    r"(?:동결|유지).*(?:결정|발표)",
+    # 동결/유지/보합 (가장 중립적인 표현)
+    r"동결", r"보합", r"횡보",
+    r"유지",
+    # 기관 주어 + 팩트 동사 (제목에서)
+    r"(?:한국은행|한은|기재부|통계청|금융위).*(?:발표|집계|전망)",
+    r"집계",
+    # 수치 나열형 제목
+    r"전년.*대비",
+    r"전망$", r"발표$",
+    # 속보/종합 (팩트 전달)
+    r"속보", r"종합\)",
 ]
 
 
@@ -106,6 +113,8 @@ def classify_framing(title: str, content: str) -> tuple[str, float]:
     """
     # 제목에 2배 가중치
     combined = f"{title} {title} {content[:500]}"
+    # neutral은 제목에서만 판정 (본문에 "밝혔다/전했다"는 거의 모든 기사에 등장)
+    title_doubled = f"{title} {title}"
 
     scores = {
         "defensive": compute_pattern_score(combined, DEFENSIVE_PATTERNS),
@@ -113,11 +122,21 @@ def classify_framing(title: str, content: str) -> tuple[str, float]:
         "optimistic": compute_pattern_score(combined, OPTIMISTIC_PATTERNS),
         "pessimistic": compute_pattern_score(combined, PESSIMISTIC_PATTERNS),
         "comparative": compute_pattern_score(combined, COMPARATIVE_PATTERNS),
-        "neutral": compute_pattern_score(combined, NEUTRAL_PATTERNS),
+        "neutral": compute_pattern_score(title_doubled, NEUTRAL_PATTERNS),
     }
 
-    # defensive 패턴은 복합 패턴이므로 보너스
-    scores["defensive"] *= 2
+    # defensive 우선 판정: 부정+긍정 동시 존재 시 defensive 가능성 높음
+    has_negative = scores["pessimistic"] > 0 or scores["alarmist"] > 0
+    has_positive = scores["optimistic"] > 0
+    if scores["defensive"] > 0 and has_negative and has_positive:
+        scores["defensive"] *= 3
+    elif scores["defensive"] > 0:
+        scores["defensive"] *= 2
+
+    # neutral은 감정적 키워드가 적을 때만 유효
+    emotional_total = scores["optimistic"] + scores["pessimistic"] + scores["alarmist"]
+    if emotional_total >= 3:
+        scores["neutral"] = 0
 
     total = sum(scores.values())
     if total == 0:
@@ -139,7 +158,7 @@ def generate_labels(
     output_path: str = "data/labeled/framing_labels.csv",
     min_confidence: float = 0.4,
     min_content_length: int = 100,
-    target_count: int = 600,
+    target_count: int = 900,
 ):
     """라벨링 데이터 생성"""
     df = pd.read_csv(input_path)
