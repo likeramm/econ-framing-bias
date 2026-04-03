@@ -1,5 +1,4 @@
 {
-  "add_cross_attention": false,
   "architectures": [
     "RobertaForSequenceClassification"
   ],
@@ -11,36 +10,35 @@
   "gradient_checkpointing": false,
   "hidden_act": "gelu",
   "hidden_dropout_prob": 0.1,
-  "hidden_size": 1024,
+  "hidden_size": 768,
   "id2label": {
-    "0": "optimistic",
-    "1": "pessimistic",
-    "2": "alarmist",
-    "3": "defensive",
-    "4": "comparative",
-    "5": "neutral"
+    "0": "alarmist",
+    "1": "comparative",
+    "2": "defensive",
+    "3": "neutral",
+    "4": "optimistic",
+    "5": "pessimistic"
   },
   "initializer_range": 0.02,
-  "intermediate_size": 4096,
-  "is_decoder": false,
+  "intermediate_size": 3072,
   "label2id": {
-    "alarmist": 2,
-    "comparative": 4,
-    "defensive": 3,
-    "neutral": 5,
-    "optimistic": 0,
-    "pessimistic": 1
+    "alarmist": 0,
+    "comparative": 1,
+    "defensive": 2,
+    "neutral": 3,
+    "optimistic": 4,
+    "pessimistic": 5
   },
   "layer_norm_eps": 1e-05,
   "max_position_embeddings": 514,
   "model_type": "roberta",
-  "num_attention_heads": 16,
-  "num_hidden_layers": 24,
+  "num_attention_heads": 12,
+  "num_hidden_layers": 12,
   "pad_token_id": 1,
-  "tie_word_embeddings": true,
+  "position_embedding_type": "absolute",
   "tokenizer_class": "BertTokenizer",
-  "transformers_version": "5.3.0",
+  "transformers_version": "4.57.3",
   "type_vocab_size": 1,
-  "use_cache": false,
+  "use_cache": true,
   "vocab_size": 32000
 }
