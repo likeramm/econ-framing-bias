@@ -145,6 +145,7 @@ def train():
         num_labels=len(LABELS),
         id2label=ID2LABEL,
         label2id=LABEL2ID,
+        ignore_mismatched_sizes=True,
     )
     model.to(device)
 
