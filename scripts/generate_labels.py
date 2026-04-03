@@ -158,7 +158,7 @@ def generate_labels(
     output_path: str = "data/labeled/framing_labels.csv",
     min_confidence: float = 0.4,
     min_content_length: int = 100,
-    target_count: int = 900,
+    target_count: int = 1800,
 ):
     """라벨링 데이터 생성"""
     df = pd.read_csv(input_path)
