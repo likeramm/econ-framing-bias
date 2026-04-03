@@ -34,7 +34,7 @@ ID2LABEL = {i: l for i, l in enumerate(LABELS)}
 
 CONFIG = {
     "model_name": "klue/roberta-large",
-    "max_length": 128,
+    "max_length": 256,
     "batch_size": 8,
     "epochs": 15,
     "lr": 1e-5,
@@ -133,12 +133,42 @@ def train():
         df_auto = df_auto[~df_auto["article_id"].isin(manual_ids)]
         df_auto = df_auto[df_auto["confidence"] >= min_conf].copy()
         print(f"자동 라벨 (confidence >= {min_conf}): {len(df_auto)}건")
-        df = pd.concat([df_manual[["title_clean", "framing_label"]],
-                        df_auto[["title_clean", "framing_label"]]], ignore_index=True)
+        df = pd.concat([
+            df_manual[["article_id", "title_clean", "framing_label"]],
+            df_auto[["article_id", "title_clean", "framing_label"]],
+        ], ignore_index=True)
     else:
         print("자동 라벨 파일 없음 → 수동 라벨만 사용")
-        df = df_manual[["title_clean", "framing_label"]].copy()
+        df = df_manual[["article_id", "title_clean", "framing_label"]].copy()
 
+    # 본문(content) 결합: dataset.csv에서 content_clean 매핑
+    df_full = pd.read_csv(cfg["full_data_path"], usecols=["article_id", "content_clean", "media_name"])
+    df = df.merge(df_full, on="article_id", how="left")
+
+    # 중복 content 처리: 매일경제TV/서울경제TV 등 크롤링 오류 매체는 content 제거
+    BAD_CONTENT_MEDIA = ["매일경제TV", "서울경제TV", "미주중앙일보"]
+    bad_mask = df["media_name"].isin(BAD_CONTENT_MEDIA)
+    df.loc[bad_mask, "content_clean"] = ""
+    print(f"크롤링 오류 매체 content 제거: {bad_mask.sum()}건 ({', '.join(BAD_CONTENT_MEDIA)})")
+
+    # 동일 content가 5건 이상 공유된 경우도 제거 (크롤링 오류)
+    content_counts = df["content_clean"].fillna("").value_counts()
+    dup_contents = set(content_counts[content_counts >= 5].index) - {""}
+    dup_mask = df["content_clean"].isin(dup_contents)
+    df.loc[dup_mask, "content_clean"] = ""
+    print(f"중복 content(5건 이상 공유) 제거: {dup_mask.sum()}건")
+
+    # 텍스트 구성: title [SEP] content (content 있으면 앞 500자)
+    def build_text(row):
+        title = str(row["title_clean"]).strip()
+        content = str(row["content_clean"]).strip() if pd.notna(row["content_clean"]) else ""
+        if content and len(content) > 10:
+            return f"{title} [SEP] {content[:500]}"
+        return title
+
+    df["text"] = df.apply(build_text, axis=1)
+    has_content = df["text"].str.contains(r"\[SEP\]", regex=True).sum()
+    print(f"title + content 결합: {has_content}건 / title만: {len(df) - has_content}건")
     print(f"총 학습 데이터: {len(df)}건")
 
     # 라벨 분포 출력
@@ -147,7 +177,7 @@ def train():
     for l, c in dist.items():
         print(f"  {l:12s}: {c}건")
 
-    texts = df["title_clean"].tolist()
+    texts = df["text"].tolist()
     label_ids = [LABEL2ID[l] for l in df["framing_label"]]
 
     # 2. Train/Val 분할
@@ -288,7 +318,24 @@ def label_full_dataset(model_path: str = None):
     df = df[df["title_clean"].str.len() >= 10].drop_duplicates(subset=["title_clean"])
     print(f"전체 기사: {len(df):,}건")
 
-    texts = df["title_clean"].tolist()
+    # content 결합 (크롤링 오류 매체 제외)
+    BAD_CONTENT_MEDIA = ["매일경제TV", "서울경제TV", "미주중앙일보"]
+    bad_mask = df["media_name"].isin(BAD_CONTENT_MEDIA)
+    df.loc[bad_mask, "content_clean"] = ""
+
+    content_counts = df["content_clean"].fillna("").value_counts()
+    dup_contents = set(content_counts[content_counts >= 5].index) - {""}
+    df.loc[df["content_clean"].isin(dup_contents), "content_clean"] = ""
+
+    def build_text(row):
+        title = str(row["title_clean"]).strip()
+        content = str(row["content_clean"]).strip() if pd.notna(row["content_clean"]) else ""
+        if content and len(content) > 10:
+            return f"{title} [SEP] {content[:500]}"
+        return title
+
+    df["text"] = df.apply(build_text, axis=1)
+    texts = df["text"].tolist()
     ds = InferenceDataset(texts, tokenizer, cfg["max_length"])
     loader = DataLoader(ds, batch_size=64)
 
