@@ -33,7 +33,7 @@ LABEL2ID = {l: i for i, l in enumerate(LABELS)}
 ID2LABEL = {i: l for i, l in enumerate(LABELS)}
 
 CONFIG = {
-    "model_name": "klue/roberta-large",
+    "model_name": "snunlp/KR-FinBert-SC",
     "max_length": 128,
     "batch_size": 16,
     "epochs": 10,
