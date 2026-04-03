@@ -43,6 +43,8 @@ CONFIG = {
     "test_size": 0.15,
     "random_seed": 42,
     "labeled_path": "data/labeled/labeled_3000.csv",
+    "auto_label_path": "data/labeled/auto_labeled_full.csv",
+    "min_auto_confidence": 0.95,
     "full_data_path": "data/processed/dataset.csv",
     "model_save_path": "models/framing/best",
     "output_path": "data/labeled/auto_labeled_full.csv",
@@ -114,11 +116,30 @@ def train():
         device = torch.device("cpu")
     print(f"Device: {device}")
 
-    # 1. 데이터 로드
-    df = pd.read_csv(cfg["labeled_path"])
-    df = df.dropna(subset=["title_clean", "framing_label"])
-    df = df[df["framing_label"].isin(LABELS)].copy()
-    print(f"학습 데이터: {len(df)}건")
+    # 1. 데이터 로드 (수동 라벨 + 고신뢰도 자동 라벨)
+    df_manual = pd.read_csv(cfg["labeled_path"])
+    df_manual = df_manual.dropna(subset=["title_clean", "framing_label"])
+    df_manual = df_manual[df_manual["framing_label"].isin(LABELS)].copy()
+    print(f"수동 라벨: {len(df_manual)}건")
+
+    # 자동 라벨 중 고신뢰도만 추가 (수동 라벨과 중복 제외)
+    auto_path = cfg.get("auto_label_path", "data/labeled/auto_labeled_full.csv")
+    min_conf = cfg.get("min_auto_confidence", 0.95)
+    if Path(auto_path).exists():
+        df_auto = pd.read_csv(auto_path)
+        df_auto = df_auto.dropna(subset=["title_clean", "framing_label"])
+        df_auto = df_auto[df_auto["framing_label"].isin(LABELS)]
+        manual_ids = set(df_manual["article_id"])
+        df_auto = df_auto[~df_auto["article_id"].isin(manual_ids)]
+        df_auto = df_auto[df_auto["confidence"] >= min_conf].copy()
+        print(f"자동 라벨 (confidence >= {min_conf}): {len(df_auto)}건")
+        df = pd.concat([df_manual[["title_clean", "framing_label"]],
+                        df_auto[["title_clean", "framing_label"]]], ignore_index=True)
+    else:
+        print("자동 라벨 파일 없음 → 수동 라벨만 사용")
+        df = df_manual[["title_clean", "framing_label"]].copy()
+
+    print(f"총 학습 데이터: {len(df)}건")
 
     # 라벨 분포 출력
     dist = df["framing_label"].value_counts()
