@@ -17,8 +17,8 @@ env/
 .env
 
 # Data
-data/labeled/
 data/raw_backup_v1/
+# data/labeled/ 는 추적 허용 (학습 데이터)
 
 # Model Checkpoints & Weights
 *.pt
