@@ -1,11 +1,11 @@
 """KLUE-RoBERTa 프레이밍 분류 모델 학습
 
-1000건 수동 라벨 데이터로 파인튜닝 후,
+3000건 수동 라벨 데이터로 파인튜닝 후,
 전체 데이터셋 자동 라벨링까지 수행.
 
 사용법:
   python scripts/train_framing.py           # 학습 + 전체 라벨링
-  python scripts/train_framing.py --eval    # 평가만
+  python scripts/train_framing.py --eval    # 평가만 (기존 모델로 전체 라벨링)
 """
 
 import argparse
@@ -33,7 +33,7 @@ LABEL2ID = {l: i for i, l in enumerate(LABELS)}
 ID2LABEL = {i: l for i, l in enumerate(LABELS)}
 
 CONFIG = {
-    "model_name": "klue/roberta-base",
+    "model_name": "klue/roberta-large",
     "max_length": 128,
     "batch_size": 16,
     "epochs": 10,
@@ -42,7 +42,7 @@ CONFIG = {
     "weight_decay": 0.01,
     "test_size": 0.15,
     "random_seed": 42,
-    "labeled_path": "data/labeled/labeled_1000.csv",
+    "labeled_path": "data/labeled/labeled_3000.csv",
     "full_data_path": "data/processed/dataset.csv",
     "model_save_path": "models/framing/best",
     "output_path": "data/labeled/auto_labeled_full.csv",
@@ -106,7 +106,12 @@ class InferenceDataset(Dataset):
 def train():
     cfg = CONFIG
     torch.manual_seed(cfg["random_seed"])
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     print(f"Device: {device}")
 
     # 1. 데이터 로드
@@ -242,7 +247,12 @@ def label_full_dataset(model_path: str = None):
     if model_path is None:
         model_path = cfg["model_save_path"]
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     print(f"\n=== 전체 데이터 자동 라벨링 ===")
     print(f"모델: {model_path}")
 
