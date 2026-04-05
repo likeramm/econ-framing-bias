@@ -34,8 +34,9 @@ ID2LABEL = {i: l for i, l in enumerate(LABELS)}
 
 CONFIG = {
     "model_name": "klue/roberta-large",
-    "max_length": 256,
-    "batch_size": 8,
+    "max_length": 512,
+    "batch_size": 4,
+    "gradient_accumulation_steps": 2,
     "epochs": 15,
     "lr": 1e-5,
     "warmup_ratio": 0.1,
@@ -228,23 +229,28 @@ def train():
     save_path = Path(cfg["model_save_path"])
     save_path.mkdir(parents=True, exist_ok=True)
 
+    accum_steps = cfg.get("gradient_accumulation_steps", 1)
+
     for epoch in range(cfg["epochs"]):
         # ── Train ──
         model.train()
         tr_loss = 0.0
-        for batch in tr_loader:
+        optimizer.zero_grad()
+        for step, batch in enumerate(tr_loader):
             input_ids = batch["input_ids"].to(device)
             attn_mask = batch["attention_mask"].to(device)
             labels = batch["labels"].to(device)
 
-            optimizer.zero_grad()
             outputs = model(input_ids=input_ids, attention_mask=attn_mask)
-            loss = loss_fn(outputs.logits, labels)
+            loss = loss_fn(outputs.logits, labels) / accum_steps
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-            scheduler.step()
-            tr_loss += loss.item()
+            tr_loss += loss.item() * accum_steps
+
+            if (step + 1) % accum_steps == 0 or (step + 1) == len(tr_loader):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
 
         # ── Validation ──
         model.eval()
