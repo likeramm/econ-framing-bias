@@ -19,9 +19,11 @@ import torch
 from sklearn.metrics import classification_report, f1_score
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
+from torch.cuda.amp import GradScaler, autocast
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    DataCollatorWithPadding,
     get_linear_schedule_with_warmup,
 )
 
@@ -69,14 +71,12 @@ class FramingDataset(Dataset):
         enc = self.tokenizer(
             self.texts[idx],
             max_length=self.max_length,
-            padding="max_length",
             truncation=True,
-            return_tensors="pt",
         )
         return {
-            "input_ids": enc["input_ids"].squeeze(0),
-            "attention_mask": enc["attention_mask"].squeeze(0),
-            "labels": torch.tensor(self.labels[idx], dtype=torch.long),
+            "input_ids": enc["input_ids"],
+            "attention_mask": enc["attention_mask"],
+            "labels": int(self.labels[idx]),
         }
 
 
@@ -93,13 +93,11 @@ class InferenceDataset(Dataset):
         enc = self.tokenizer(
             self.texts[idx],
             max_length=self.max_length,
-            padding="max_length",
             truncation=True,
-            return_tensors="pt",
         )
         return {
-            "input_ids": enc["input_ids"].squeeze(0),
-            "attention_mask": enc["attention_mask"].squeeze(0),
+            "input_ids": enc["input_ids"],
+            "attention_mask": enc["attention_mask"],
         }
 
 
@@ -111,11 +109,14 @@ def train():
     torch.manual_seed(cfg["random_seed"])
     if torch.cuda.is_available():
         device = torch.device("cuda")
+        torch.backends.cudnn.benchmark = True
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
-    print(f"Device: {device}")
+    use_amp = device.type == "cuda"
+    pin_memory = device.type == "cuda"
+    print(f"Device: {device} | AMP(FP16): {use_amp}")
 
     # 1. 데이터 로드 (수동 라벨 + 고신뢰도 자동 라벨)
     df_manual = pd.read_csv(cfg["labeled_path"])
@@ -209,11 +210,27 @@ def train():
     class_weights = torch.tensor(weights, dtype=torch.float).to(device)
     print(f"클래스 가중치: {[f'{w:.2f}' for w in weights]}")
 
-    # 5. DataLoader
+    # 5. DataLoader (동적 패딩 + num_workers + pin_memory)
+    collator = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8)
     tr_ds = FramingDataset(tr_texts, tr_labels, tokenizer, cfg["max_length"])
     val_ds = FramingDataset(val_texts, val_labels, tokenizer, cfg["max_length"])
-    tr_loader = DataLoader(tr_ds, batch_size=cfg["batch_size"], shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=cfg["batch_size"] * 2)
+    tr_loader = DataLoader(
+        tr_ds,
+        batch_size=cfg["batch_size"],
+        shuffle=True,
+        collate_fn=collator,
+        num_workers=2,
+        pin_memory=pin_memory,
+        persistent_workers=True,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=cfg["batch_size"] * 2,
+        collate_fn=collator,
+        num_workers=2,
+        pin_memory=pin_memory,
+        persistent_workers=True,
+    )
 
     # 6. Optimizer & Scheduler
     optimizer = torch.optim.AdamW(
@@ -230,6 +247,7 @@ def train():
     save_path.mkdir(parents=True, exist_ok=True)
 
     accum_steps = cfg.get("gradient_accumulation_steps", 1)
+    scaler = GradScaler(enabled=use_amp)
 
     for epoch in range(cfg["epochs"]):
         # ── Train ──
@@ -237,18 +255,22 @@ def train():
         tr_loss = 0.0
         optimizer.zero_grad()
         for step, batch in enumerate(tr_loader):
-            input_ids = batch["input_ids"].to(device)
-            attn_mask = batch["attention_mask"].to(device)
-            labels = batch["labels"].to(device)
+            input_ids = batch["input_ids"].to(device, non_blocking=True)
+            attn_mask = batch["attention_mask"].to(device, non_blocking=True)
+            labels = batch["labels"].to(device, non_blocking=True)
 
-            outputs = model(input_ids=input_ids, attention_mask=attn_mask)
-            loss = loss_fn(outputs.logits, labels) / accum_steps
-            loss.backward()
+            with autocast(enabled=use_amp, dtype=torch.float16):
+                outputs = model(input_ids=input_ids, attention_mask=attn_mask)
+                loss = loss_fn(outputs.logits, labels) / accum_steps
+
+            scaler.scale(loss).backward()
             tr_loss += loss.item() * accum_steps
 
             if (step + 1) % accum_steps == 0 or (step + 1) == len(tr_loader):
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                optimizer.step()
+                scaler.step(optimizer)
+                scaler.update()
                 scheduler.step()
                 optimizer.zero_grad()
 
@@ -257,12 +279,13 @@ def train():
         preds, trues = [], []
         with torch.no_grad():
             for batch in val_loader:
-                input_ids = batch["input_ids"].to(device)
-                attn_mask = batch["attention_mask"].to(device)
-                outputs = model(input_ids=input_ids, attention_mask=attn_mask)
+                input_ids = batch["input_ids"].to(device, non_blocking=True)
+                attn_mask = batch["attention_mask"].to(device, non_blocking=True)
+                with autocast(enabled=use_amp, dtype=torch.float16):
+                    outputs = model(input_ids=input_ids, attention_mask=attn_mask)
                 pred = outputs.logits.argmax(dim=-1).cpu().numpy()
                 preds.extend(pred)
-                trues.extend(batch["labels"].numpy())
+                trues.extend(batch["labels"].cpu().numpy())
 
         f1 = f1_score(trues, preds, average="macro", zero_division=0)
         avg_loss = tr_loss / len(tr_loader)
@@ -283,12 +306,13 @@ def train():
     preds, trues = [], []
     with torch.no_grad():
         for batch in val_loader:
-            input_ids = batch["input_ids"].to(device)
-            attn_mask = batch["attention_mask"].to(device)
-            outputs = model(input_ids=input_ids, attention_mask=attn_mask)
+            input_ids = batch["input_ids"].to(device, non_blocking=True)
+            attn_mask = batch["attention_mask"].to(device, non_blocking=True)
+            with autocast(enabled=use_amp, dtype=torch.float16):
+                outputs = model(input_ids=input_ids, attention_mask=attn_mask)
             pred = outputs.logits.argmax(dim=-1).cpu().numpy()
             preds.extend(pred)
-            trues.extend(batch["labels"].numpy())
+            trues.extend(batch["labels"].cpu().numpy())
 
     pred_labels = [ID2LABEL[p] for p in preds]
     true_labels = [ID2LABEL[t] for t in trues]
@@ -307,12 +331,15 @@ def label_full_dataset(model_path: str = None):
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
+        torch.backends.cudnn.benchmark = True
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
+    use_amp = device.type == "cuda"
+    pin_memory = device.type == "cuda"
     print(f"\n=== 전체 데이터 자동 라벨링 ===")
-    print(f"모델: {model_path}")
+    print(f"모델: {model_path} | AMP(FP16): {use_amp}")
 
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForSequenceClassification.from_pretrained(model_path)
@@ -342,19 +369,29 @@ def label_full_dataset(model_path: str = None):
 
     df["text"] = df.apply(build_text, axis=1)
     texts = df["text"].tolist()
+    collator = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8)
     ds = InferenceDataset(texts, tokenizer, cfg["max_length"])
-    loader = DataLoader(ds, batch_size=64)
+    infer_batch = 64
+    loader = DataLoader(
+        ds,
+        batch_size=infer_batch,
+        collate_fn=collator,
+        num_workers=2,
+        pin_memory=pin_memory,
+        persistent_workers=True,
+    )
 
     all_preds = []
     all_probs = []
     with torch.no_grad():
         for i, batch in enumerate(loader):
             if i % 20 == 0:
-                print(f"  처리 중... {i * 64:,}/{len(texts):,}")
-            input_ids = batch["input_ids"].to(device)
-            attn_mask = batch["attention_mask"].to(device)
-            outputs = model(input_ids=input_ids, attention_mask=attn_mask)
-            probs = torch.softmax(outputs.logits, dim=-1).cpu().numpy()
+                print(f"  처리 중... {i * infer_batch:,}/{len(texts):,}")
+            input_ids = batch["input_ids"].to(device, non_blocking=True)
+            attn_mask = batch["attention_mask"].to(device, non_blocking=True)
+            with autocast(enabled=use_amp, dtype=torch.float16):
+                outputs = model(input_ids=input_ids, attention_mask=attn_mask)
+            probs = torch.softmax(outputs.logits.float(), dim=-1).cpu().numpy()
             preds = outputs.logits.argmax(dim=-1).cpu().numpy()
             all_preds.extend(preds)
             all_probs.extend(probs.max(axis=1))
