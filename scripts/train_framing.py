@@ -25,6 +25,7 @@ from sklearn.metrics import classification_report, f1_score
 from sklearn.model_selection import train_test_split
 from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader, Dataset
+from tqdm.auto import tqdm
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -118,7 +119,8 @@ def train():
     torch.manual_seed(cfg["random_seed"])
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        torch.backends.cudnn.benchmark = True
+        # 동적 패딩은 shape가 매 배치 달라지므로 cudnn.benchmark는 오히려 손해
+        torch.backends.cudnn.benchmark = False
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         device = torch.device("mps")
     else:
@@ -266,7 +268,12 @@ def train():
         model.train()
         tr_loss = 0.0
         optimizer.zero_grad()
-        for step, batch in enumerate(tr_loader):
+        pbar = tqdm(
+            tr_loader,
+            desc=f"Epoch {epoch+1}/{cfg['epochs']} [train]",
+            dynamic_ncols=True,
+        )
+        for step, batch in enumerate(pbar):
             input_ids = batch["input_ids"].to(device, non_blocking=True)
             attn_mask = batch["attention_mask"].to(device, non_blocking=True)
             labels = batch["labels"].to(device, non_blocking=True)
@@ -276,7 +283,8 @@ def train():
                 loss = loss_fn(outputs.logits, labels) / accum_steps
 
             scaler.scale(loss).backward()
-            tr_loss += loss.item() * accum_steps
+            step_loss = loss.item() * accum_steps
+            tr_loss += step_loss
 
             if (step + 1) % accum_steps == 0 or (step + 1) == len(tr_loader):
                 scaler.unscale_(optimizer)
@@ -286,11 +294,14 @@ def train():
                 scheduler.step()
                 optimizer.zero_grad()
 
+            if step % 10 == 0:
+                pbar.set_postfix(loss=f"{step_loss:.4f}")
+
         # ── Validation ──
         model.eval()
         preds, trues = [], []
         with torch.no_grad():
-            for batch in val_loader:
+            for batch in tqdm(val_loader, desc=f"Epoch {epoch+1}/{cfg['epochs']} [val]", dynamic_ncols=True):
                 input_ids = batch["input_ids"].to(device, non_blocking=True)
                 attn_mask = batch["attention_mask"].to(device, non_blocking=True)
                 with autocast("cuda", dtype=torch.float16, enabled=use_amp):
@@ -343,7 +354,7 @@ def label_full_dataset(model_path: str = None):
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.benchmark = False
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         device = torch.device("mps")
     else:
@@ -397,9 +408,7 @@ def label_full_dataset(model_path: str = None):
     all_preds = []
     all_probs = []
     with torch.no_grad():
-        for i, batch in enumerate(loader):
-            if i % 20 == 0:
-                print(f"  처리 중... {i * infer_batch:,}/{len(texts):,}")
+        for batch in tqdm(loader, desc="Inference", dynamic_ncols=True):
             input_ids = batch["input_ids"].to(device, non_blocking=True)
             attn_mask = batch["attention_mask"].to(device, non_blocking=True)
             with autocast("cuda", dtype=torch.float16, enabled=use_amp):
