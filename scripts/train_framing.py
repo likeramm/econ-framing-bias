@@ -10,22 +10,31 @@
 
 import argparse
 import json
+import os
+import platform
 import re
 from pathlib import Path
+
+# HF fast tokenizer가 DataLoader worker와 데드락을 일으키는 것을 방지
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import numpy as np
 import pandas as pd
 import torch
 from sklearn.metrics import classification_report, f1_score
 from sklearn.model_selection import train_test_split
+from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader, Dataset
-from torch.cuda.amp import GradScaler, autocast
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
     DataCollatorWithPadding,
     get_linear_schedule_with_warmup,
 )
+
+# Windows는 spawn 방식이라 num_workers>0 + fast tokenizer 조합에서 행 걸림
+IS_WINDOWS = platform.system() == "Windows"
+DEFAULT_NUM_WORKERS = 0 if IS_WINDOWS else 2
 
 # ══════════════════════════════════════════════════════════
 # 설정
@@ -214,22 +223,25 @@ def train():
     collator = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8)
     tr_ds = FramingDataset(tr_texts, tr_labels, tokenizer, cfg["max_length"])
     val_ds = FramingDataset(val_texts, val_labels, tokenizer, cfg["max_length"])
+    num_workers = DEFAULT_NUM_WORKERS
+    persistent = num_workers > 0
+    print(f"DataLoader num_workers={num_workers} (Windows={IS_WINDOWS})")
     tr_loader = DataLoader(
         tr_ds,
         batch_size=cfg["batch_size"],
         shuffle=True,
         collate_fn=collator,
-        num_workers=2,
+        num_workers=num_workers,
         pin_memory=pin_memory,
-        persistent_workers=True,
+        persistent_workers=persistent,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=cfg["batch_size"] * 2,
         collate_fn=collator,
-        num_workers=2,
+        num_workers=num_workers,
         pin_memory=pin_memory,
-        persistent_workers=True,
+        persistent_workers=persistent,
     )
 
     # 6. Optimizer & Scheduler
@@ -247,7 +259,7 @@ def train():
     save_path.mkdir(parents=True, exist_ok=True)
 
     accum_steps = cfg.get("gradient_accumulation_steps", 1)
-    scaler = GradScaler(enabled=use_amp)
+    scaler = GradScaler("cuda", enabled=use_amp)
 
     for epoch in range(cfg["epochs"]):
         # ── Train ──
@@ -259,7 +271,7 @@ def train():
             attn_mask = batch["attention_mask"].to(device, non_blocking=True)
             labels = batch["labels"].to(device, non_blocking=True)
 
-            with autocast(enabled=use_amp, dtype=torch.float16):
+            with autocast("cuda", dtype=torch.float16, enabled=use_amp):
                 outputs = model(input_ids=input_ids, attention_mask=attn_mask)
                 loss = loss_fn(outputs.logits, labels) / accum_steps
 
@@ -281,7 +293,7 @@ def train():
             for batch in val_loader:
                 input_ids = batch["input_ids"].to(device, non_blocking=True)
                 attn_mask = batch["attention_mask"].to(device, non_blocking=True)
-                with autocast(enabled=use_amp, dtype=torch.float16):
+                with autocast("cuda", dtype=torch.float16, enabled=use_amp):
                     outputs = model(input_ids=input_ids, attention_mask=attn_mask)
                 pred = outputs.logits.argmax(dim=-1).cpu().numpy()
                 preds.extend(pred)
@@ -308,7 +320,7 @@ def train():
         for batch in val_loader:
             input_ids = batch["input_ids"].to(device, non_blocking=True)
             attn_mask = batch["attention_mask"].to(device, non_blocking=True)
-            with autocast(enabled=use_amp, dtype=torch.float16):
+            with autocast("cuda", dtype=torch.float16, enabled=use_amp):
                 outputs = model(input_ids=input_ids, attention_mask=attn_mask)
             pred = outputs.logits.argmax(dim=-1).cpu().numpy()
             preds.extend(pred)
@@ -372,13 +384,14 @@ def label_full_dataset(model_path: str = None):
     collator = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8)
     ds = InferenceDataset(texts, tokenizer, cfg["max_length"])
     infer_batch = 64
+    num_workers = DEFAULT_NUM_WORKERS
     loader = DataLoader(
         ds,
         batch_size=infer_batch,
         collate_fn=collator,
-        num_workers=2,
+        num_workers=num_workers,
         pin_memory=pin_memory,
-        persistent_workers=True,
+        persistent_workers=num_workers > 0,
     )
 
     all_preds = []
@@ -389,7 +402,7 @@ def label_full_dataset(model_path: str = None):
                 print(f"  처리 중... {i * infer_batch:,}/{len(texts):,}")
             input_ids = batch["input_ids"].to(device, non_blocking=True)
             attn_mask = batch["attention_mask"].to(device, non_blocking=True)
-            with autocast(enabled=use_amp, dtype=torch.float16):
+            with autocast("cuda", dtype=torch.float16, enabled=use_amp):
                 outputs = model(input_ids=input_ids, attention_mask=attn_mask)
             probs = torch.softmax(outputs.logits.float(), dim=-1).cpu().numpy()
             preds = outputs.logits.argmax(dim=-1).cpu().numpy()
