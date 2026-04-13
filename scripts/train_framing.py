@@ -1,18 +1,16 @@
 """KLUE-RoBERTa 프레이밍 분류 모델 학습
 
-3000건 수동 라벨 데이터로 파인튜닝 후,
-전체 데이터셋 자동 라벨링까지 수행.
+수동 라벨 + 고신뢰도 자동 라벨 데이터로 파인튜닝.
 
 사용법:
-  python scripts/train_framing.py           # 학습 + 전체 라벨링
-  python scripts/train_framing.py --eval    # 평가만 (기존 모델로 전체 라벨링)
+  python scripts/train_framing.py
+
+자동 라벨링은 별도 스크립트:
+  python scripts/auto_label.py
 """
 
-import argparse
-import json
 import os
 import platform
-import re
 from pathlib import Path
 
 # HF fast tokenizer가 DataLoader worker와 데드락을 일으키는 것을 방지
@@ -60,7 +58,6 @@ CONFIG = {
     "min_auto_confidence": 0.95,
     "full_data_path": "data/processed/dataset.csv",
     "model_save_path": "models/framing/best",
-    "output_path": "data/labeled/auto_labeled_full.csv",
 }
 
 
@@ -87,27 +84,6 @@ class FramingDataset(Dataset):
             "input_ids": enc["input_ids"],
             "attention_mask": enc["attention_mask"],
             "labels": int(self.labels[idx]),
-        }
-
-
-class InferenceDataset(Dataset):
-    def __init__(self, texts, tokenizer, max_length):
-        self.texts = texts
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-
-    def __len__(self):
-        return len(self.texts)
-
-    def __getitem__(self, idx):
-        enc = self.tokenizer(
-            self.texts[idx],
-            max_length=self.max_length,
-            truncation=True,
-        )
-        return {
-            "input_ids": enc["input_ids"],
-            "attention_mask": enc["attention_mask"],
         }
 
 
@@ -345,118 +321,7 @@ def train():
 
 
 # ══════════════════════════════════════════════════════════
-# 전체 데이터 자동 라벨링
-# ══════════════════════════════════════════════════════════
-def label_full_dataset(model_path: str = None):
-    cfg = CONFIG
-    if model_path is None:
-        model_path = cfg["model_save_path"]
-
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-        torch.backends.cudnn.benchmark = False
-    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-    use_amp = device.type == "cuda"
-    pin_memory = device.type == "cuda"
-    print(f"\n=== 전체 데이터 자동 라벨링 ===")
-    print(f"모델: {model_path} | AMP(FP16): {use_amp}")
-
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForSequenceClassification.from_pretrained(model_path)
-    model.to(device).eval()
-
-    # 전체 데이터 로드
-    df = pd.read_csv(cfg["full_data_path"])
-    df = df.dropna(subset=["title_clean"])
-    df = df[df["title_clean"].str.len() >= 10].drop_duplicates(subset=["title_clean"])
-    print(f"전체 기사: {len(df):,}건")
-
-    # content 결합 (크롤링 오류 매체 제외)
-    BAD_CONTENT_MEDIA = ["매일경제TV", "서울경제TV", "미주중앙일보"]
-    bad_mask = df["media_name"].isin(BAD_CONTENT_MEDIA)
-    df.loc[bad_mask, "content_clean"] = ""
-
-    content_counts = df["content_clean"].fillna("").value_counts()
-    dup_contents = set(content_counts[content_counts >= 5].index) - {""}
-    df.loc[df["content_clean"].isin(dup_contents), "content_clean"] = ""
-
-    def build_text(row):
-        title = str(row["title_clean"]).strip()
-        content = str(row["content_clean"]).strip() if pd.notna(row["content_clean"]) else ""
-        if content and len(content) > 10:
-            return f"{title} [SEP] {content[:500]}"
-        return title
-
-    df["text"] = df.apply(build_text, axis=1)
-    texts = df["text"].tolist()
-    collator = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8)
-    ds = InferenceDataset(texts, tokenizer, cfg["max_length"])
-    infer_batch = 64
-    num_workers = DEFAULT_NUM_WORKERS
-    loader = DataLoader(
-        ds,
-        batch_size=infer_batch,
-        collate_fn=collator,
-        num_workers=num_workers,
-        pin_memory=pin_memory,
-        persistent_workers=num_workers > 0,
-    )
-
-    all_preds = []
-    all_probs = []
-    with torch.no_grad():
-        for batch in tqdm(loader, desc="Inference", dynamic_ncols=True):
-            input_ids = batch["input_ids"].to(device, non_blocking=True)
-            attn_mask = batch["attention_mask"].to(device, non_blocking=True)
-            with autocast("cuda", dtype=torch.float16, enabled=use_amp):
-                outputs = model(input_ids=input_ids, attention_mask=attn_mask)
-            probs = torch.softmax(outputs.logits.float(), dim=-1).cpu().numpy()
-            preds = outputs.logits.argmax(dim=-1).cpu().numpy()
-            all_preds.extend(preds)
-            all_probs.extend(probs.max(axis=1))
-
-    df["framing_label"] = [ID2LABEL[p] for p in all_preds]
-    df["confidence"] = all_probs
-
-    # 결과 저장
-    out_cols = [c for c in [
-        "article_id", "title", "title_clean", "framing_label", "confidence",
-        "media_name", "media_group", "event_type", "date"
-    ] if c in df.columns]
-    result = df[out_cols]
-
-    out_path = Path(cfg["output_path"])
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    result.to_csv(out_path, index=False, encoding="utf-8-sig")
-
-    # 분포 출력
-    dist = result["framing_label"].value_counts()
-    print(f"\n라벨 분포 (전체 {len(result):,}건):")
-    for label in LABELS:
-        cnt = dist.get(label, 0)
-        pct = cnt / len(result) * 100
-        bar = "█" * int(pct / 2)
-        print(f"  {label:12s}: {cnt:5d}건 ({pct:5.1f}%) {bar}")
-
-    print(f"\n저장 완료: {out_path}")
-    return result
-
-
-# ══════════════════════════════════════════════════════════
 # 메인
 # ══════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--eval", action="store_true", help="학습 없이 전체 라벨링만 실행")
-    parser.add_argument("--model", default=None, help="모델 경로 (--eval 시 사용)")
-    args = parser.parse_args()
-
-    if args.eval:
-        model_path = args.model or CONFIG["model_save_path"]
-        label_full_dataset(model_path)
-    else:
-        model_path = train()
-        label_full_dataset(str(model_path))
+    train()
