@@ -1,30 +1,30 @@
 {
   "panel": {
-    "n_obs": 592,
-    "n_entities": 7,
+    "n_obs": 875,
+    "n_entities": 11,
     "coefficients": {
       "bias_score": {
-        "coefficient": 1.7196661741369403e-05,
-        "std_error": 0.00017278866392993954,
-        "t_stat": 0.09952424742598923,
-        "p_value": 0.9207640252434803,
+        "coefficient": -0.00014982635358338028,
+        "std_error": 0.00027160347327976876,
+        "t_stat": -0.5516363681735751,
+        "p_value": 0.581361174753181,
         "significant_5pct": false,
         "significant_1pct": false
       },
       "sentiment_score": {
-        "coefficient": -0.00020951325526092287,
-        "std_error": 0.0006034430831439117,
-        "t_stat": -0.34719638208357295,
-        "p_value": 0.7285975648039793,
+        "coefficient": 0.0005741101044082979,
+        "std_error": 0.0006664065419494604,
+        "t_stat": 0.8615013032867824,
+        "p_value": 0.3892362513457903,
         "significant_5pct": false,
         "significant_1pct": false
       }
     },
-    "r2_within": -0.00025104547357712725,
-    "r2_overall": -0.00018393477906508693,
-    "f_stat": 0.0599830030399358,
-    "f_pvalue": 0.9417876733423187,
-    "summary": "                          PanelOLS Estimation Summary                           \n================================================================================\nDep. Variable:           stock_return   R-squared:                        0.0003\nEstimator:                   PanelOLS   R-squared (Between):              0.0047\nNo. Observations:                 592   R-squared (Within):              -0.0003\nDate:                Fri, Aug 07 2026   R-squared (Overall):             -0.0002\nTime:                        18:14:22   Log-likelihood                    2742.3\nCov. Estimator:             Clustered                                           \n                                        F-statistic:                      0.0600\nEntities:                           7   P-value                           0.9418\nAvg Obs:                       84.571   Distribution:                   F(2,475)\nMin Obs:                       61.000                                           \nMax Obs:                       108.00   F-statistic (robust):             0.0747\n                                        P-value                           0.9280\nTime periods:                     109   Distribution:                   F(2,475)\nAvg Obs:                       5.4312                                           \nMin Obs:                       2.0000                                           \nMax Obs:                       7.0000                                           \n                                                                                \n                                Parameter Estimates                                \n===================================================================================\n                 Parameter  Std. Err.     T-stat    P-value    Lower CI    Upper CI\n-----------------------------------------------------------------------------------\nbias_score        1.72e-05     0.0002     0.0995     0.9208     -0.0003      0.0004\nsentiment_score    -0.0002     0.0006    -0.3472     0.7286     -0.0014      0.0010\n===================================================================================\n\nF-test for Poolability: 10.902\nP-value: 0.0000\nDistribution: F(114,475)\n\nIncluded effects: Entity, Time",
+    "r2_within": -0.002789535411882982,
+    "r2_overall": -0.0029534121010230674,
+    "f_stat": 0.365948475276223,
+    "f_pvalue": 0.6936618090421393,
+    "summary": "                          PanelOLS Estimation Summary                           \n================================================================================\nDep. Variable:           stock_return   R-squared:                        0.0010\nEstimator:                   PanelOLS   R-squared (Between):             -0.0371\nNo. Observations:                 875   R-squared (Within):              -0.0028\nDate:                Fri, Aug 07 2026   R-squared (Overall):             -0.0030\nTime:                        18:29:47   Log-likelihood                    4011.1\nCov. Estimator:             Clustered                                           \n                                        F-statistic:                      0.3659\nEntities:                          11   P-value                           0.6937\nAvg Obs:                       79.545   Distribution:                   F(2,753)\nMin Obs:                       45.000                                           \nMax Obs:                       108.00   F-statistic (robust):             0.4180\n                                        P-value                           0.6585\nTime periods:                     110   Distribution:                   F(2,753)\nAvg Obs:                       7.9545                                           \nMin Obs:                       2.0000                                           \nMax Obs:                       11.000                                           \n                                                                                \n                                Parameter Estimates                                \n===================================================================================\n                 Parameter  Std. Err.     T-stat    P-value    Lower CI    Upper CI\n-----------------------------------------------------------------------------------\nbias_score         -0.0001     0.0003    -0.5516     0.5814     -0.0007      0.0004\nsentiment_score     0.0006     0.0007     0.8615     0.3892     -0.0007      0.0019\n===================================================================================\n\nF-test for Poolability: 15.534\nP-value: 0.0000\nDistribution: F(119,753)\n\nIncluded effects: Entity, Time",
     "identification": {
       "entity": "sector",
       "dependent_constant_within_time_share": 0.0
