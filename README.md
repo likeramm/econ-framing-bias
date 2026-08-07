@@ -45,8 +45,8 @@
 
 ```
 [뉴스 크롤링]        [ECOS API]         [yfinance]
- 10개 언론사           경제지표 7종        KOSPI + 섹터 ETF 14종
- 5년간 6,381건        (금리,GDP,CPI...)
+ 38개 언론사           경제지표 7종        KOSPI + 섹터 ETF 14종
+ 10년간 14,135건      (금리,CPI,CCSI...)   10년간 35,821건
        │                  │                  │
        ▼                  ▼                  ▼
 ┌─────────────────────────────────────────────────┐
@@ -85,12 +85,15 @@
 
 ## 데이터 현황
 
-| 데이터 | 규모 | 출처 |
-|--------|------|------|
-| 뉴스 기사 | **6,381건** (5년, 10개 언론사, 15개 키워드) | 네이버뉴스 |
-| 경제 지표 | 7종 (GDP, 금리, CPI, 경상수지, CCSI, 실업률, 수출액) | 한국은행 ECOS API |
-| 주가 데이터 | 14종목/지수 (KOSPI, 섹터별 ETF) | yfinance |
-| 라벨링 데이터 | **900건** (6개 클래스 x 150건 균등 분포) | 규칙 기반 자동 생성 |
+| 데이터 | 규모 | 기간 | 출처 |
+|--------|------|------|------|
+| 뉴스 기사 | **14,135건** (38개 언론사, 15개 키워드) | 2016-03 ~ 2026-03 | 네이버뉴스 |
+| 경제 지표 | 7종 (기준금리, 소비자물가, 전산업생산, 실업률, CCSI, 경상수지, 원/달러환율) | 2015-09 ~ 2026-03 (127개월) | 한국은행 ECOS API |
+| 주가 데이터 | 14종목/지수 (KOSPI, KOSDAQ, 섹터 ETF 6종, 개별주 5종, KODEX200) | 2015-09 ~ 2026-03 (35,821건) | yfinance |
+| 수동 라벨 | **3,262건** (모델 학습용) | — | 직접 라벨링 |
+| 자동 라벨 | **13,886건** (fine-tuned KLUE-RoBERTa-large, F1 0.74) | — | 모델 추론 |
+
+> 주가·지표를 2015-09부터 수집하는 이유: 뉴스 시작일(2016-03)에 대해서도 이벤트 스터디 추정기간 `[-120, -11]`을 확보하기 위함. 뉴스 × 주가 분석 가능 구간은 **10.0년**이다.
 
 ### 분석 대상 언론사 (10개)
 
@@ -119,9 +122,13 @@ ver1/
 ├── models/                         # 학습된 모델 가중치
 │   ├── framing/best/               # KLUE-RoBERTa (프레이밍)
 │   └── sentiment/best/             # KcELECTRA (감성)
-├── scripts/                        # 유틸리티 스크립트
-│   └── generate_labels.py          # 규칙 기반 라벨 생성
-├── data/                           # 데이터 (Git 미포함)
+├── scripts/                        # 실행 스크립트
+│   ├── train_framing.py            # 프레이밍 분류 모델 학습
+│   ├── auto_label.py               # 전체 기사 자동 라벨링
+│   ├── sentiment_score.py          # 감성 점수 산출
+│   ├── compute_bias.py             # 편향 점수 산출
+│   └── run_analysis.py             # Phase 3 통계 분석
+├── data/                           # 데이터
 │   ├── raw/                        # 원본 크롤링 CSV
 │   ├── processed/                  # 전처리 완료 데이터셋
 │   └── labeled/                    # 라벨링 데이터 (모델 학습용)
@@ -175,9 +182,23 @@ python run_crawl.py
 # 데이터셋 구축 (전처리 + 통합)
 python build_dataset.py
 
-# 라벨 생성 (규칙 기반)
-python scripts/generate_labels.py
+# 주가 / 경제지표 수집 (기간 조정 가능)
+python -m src.collection.stock_fetcher --start 2015-09-01 --end 2026-03-07
+python -m src.collection.ecos_client   --start 201509     --end 202603
 ```
+
+### 분석 파이프라인
+
+```bash
+python scripts/train_framing.py    # 프레이밍 분류 모델 학습
+python scripts/auto_label.py       # 전체 기사 자동 라벨링
+python scripts/sentiment_score.py  # 감성 점수 산출 (sentiment_score 컬럼)
+python scripts/compute_bias.py     # 편향 점수 산출 (bias_score 컬럼)
+python scripts/run_analysis.py     # Phase 3 통계 분석 4종
+```
+
+> `run_analysis.py`는 `sentiment_score`와 `bias_score` 컬럼을 요구한다.
+> 위 순서대로 실행해야 한다.
 
 ## 개발 로드맵
 

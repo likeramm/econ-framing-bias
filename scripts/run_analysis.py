@@ -70,6 +70,26 @@ EVENT_TICKER_MAP = {
 }
 
 
+# 분석에 필요한 컬럼 → 이를 생성하는 스크립트
+REQUIRED_COLUMNS = {
+    "sentiment_score": "python scripts/sentiment_score.py",
+    "bias_score": "python scripts/compute_bias.py",
+}
+
+
+class MissingColumnsError(RuntimeError):
+    """선행 스크립트가 실행되지 않아 필수 컬럼이 없을 때 발생."""
+
+
+def check_required_columns(df_bias):
+    missing = [c for c in REQUIRED_COLUMNS if c not in df_bias.columns]
+    if not missing:
+        return
+    lines = [f"필수 컬럼 누락: {', '.join(missing)}", "", "다음 순서로 먼저 실행하세요:"]
+    lines += [f"  {REQUIRED_COLUMNS[c]}   # → {c}" for c in missing]
+    raise MissingColumnsError("\n".join(lines))
+
+
 # ══════════════════════════════════════════════════════════
 # 데이터 로드 및 전처리
 # ══════════════════════════════════════════════════════════
@@ -104,6 +124,9 @@ def load_data():
     df_bias = df_bias[df_bias["media_name"].isin(CORE_MEDIA)].copy()
     print(f"  → 핵심 10개 언론사 + 유효 날짜: {len(df_bias):,}건")
     print(f"  → 기간: {df_bias['date'].min().date()} ~ {df_bias['date'].max().date()}")
+
+    # 아래 일별 집계가 bias_score/sentiment_score를 요구하므로 여기서 먼저 확인한다.
+    check_required_columns(df_bias)
 
     # 2. 주가 데이터
     df_stock = pd.read_csv(PATHS["stock_data"])
@@ -411,18 +434,11 @@ def main():
     )
     args = parser.parse_args()
 
-    # 데이터 로드
-    df_bias, df_stock, df_econ, daily_bias = load_data()
-
-    # 필수 컬럼 확인
-    missing = []
-    if "bias_score" not in df_bias.columns:
-        missing.append("bias_score (compute_bias.py 먼저 실행)")
-    if "sentiment_score" not in df_bias.columns:
-        missing.append("sentiment_score (sentiment_score.py 먼저 실행)")
-    if missing:
-        print(f"\n필수 컬럼 누락: {', '.join(missing)}")
-        print("먼저 해당 스크립트를 실행해주세요.")
+    # 데이터 로드 (필수 컬럼 검증 포함)
+    try:
+        df_bias, df_stock, df_econ, daily_bias = load_data()
+    except MissingColumnsError as e:
+        print(f"\n{e}")
         return
 
     # 결과 저장 디렉토리
