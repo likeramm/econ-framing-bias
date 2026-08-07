@@ -35,7 +35,11 @@ DEFAULT_NUM_WORKERS = 0 if IS_WINDOWS else 2
 # 설정
 # ══════════════════════════════════════════════════════════
 CONFIG = {
-    "model_path": "models/sentiment/best",
+    # 금융 뉴스 도메인으로 파인튜닝된 3-class 모델.
+    # 영화 리뷰(Korean_sentiment)로 학습한 models/sentiment/best는 중립 사실
+    # 문장을 -0.99 수준의 강한 부정으로 판정해 중립 기사(전체의 40%)의
+    # bias_score를 통째로 왜곡한다. --model로 교체해 비교할 수 있다.
+    "model_path": "snunlp/KR-FinBert-SC",
     "max_length": 512,
     "input_path": "data/labeled/auto_labeled_full.csv",
     "full_data_path": "data/processed/dataset.csv",
@@ -81,6 +85,31 @@ def build_text(row):
     return title
 
 
+def resolve_polarity_indices(model):
+    """모델 설정에서 negative/positive 로짓 위치를 찾는다.
+
+    2-class(부정/긍정)와 3-class(부정/중립/긍정) 모델을 모두 지원한다.
+    id2label이 LABEL_0 형태로만 남아 있는 모델은 0=negative, 1=positive로 본다.
+
+    Returns:
+        (neg_idx, pos_idx, neutral_idx or None)
+    """
+    id2label = {int(i): str(l).lower() for i, l in model.config.id2label.items()}
+    label2id = {l: i for i, l in id2label.items()}
+
+    if "positive" in label2id and "negative" in label2id:
+        return label2id["negative"], label2id["positive"], label2id.get("neutral")
+
+    if model.config.num_labels == 2:
+        print("  경고: id2label에 감성 이름이 없어 0=negative, 1=positive로 가정합니다.")
+        return 0, 1, None
+
+    raise ValueError(
+        f"감성 라벨을 해석할 수 없습니다: {id2label}. "
+        "negative/positive 이름이 있는 모델을 사용하세요."
+    )
+
+
 def clean_content(df):
     """크롤링 오류 매체 및 중복 content 제거"""
     bad_mask = df["media_name"].isin(BAD_CONTENT_MEDIA)
@@ -108,13 +137,16 @@ def run_sentiment(model_path: str, batch_size: int = 64):
     use_amp = device.type == "cuda"
     pin_memory = device.type == "cuda"
 
-    print(f"=== 감성 점수 산출 (KcELECTRA) ===")
+    print(f"=== 감성 점수 산출 ===")
     print(f"모델: {model_path} | Device: {device} | AMP(FP16): {use_amp}")
 
     # 모델 로드
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForSequenceClassification.from_pretrained(model_path)
     model.to(device).eval()
+
+    neg_idx, pos_idx, neutral_idx = resolve_polarity_indices(model)
+    print(f"라벨 구성: {model.config.id2label} → neg={neg_idx}, pos={pos_idx}")
 
     # 자동 라벨링 데이터 로드 (프레이밍 라벨 포함)
     input_path = cfg["input_path"]
@@ -158,8 +190,7 @@ def run_sentiment(model_path: str, batch_size: int = 64):
             with autocast("cuda", dtype=torch.float16, enabled=use_amp):
                 outputs = model(input_ids=input_ids, attention_mask=attn_mask)
             probs = torch.softmax(outputs.logits.float(), dim=-1).cpu().numpy()
-            # label 0 = negative, label 1 = positive
-            scores = probs[:, 1] - probs[:, 0]  # P(pos) - P(neg)
+            scores = probs[:, pos_idx] - probs[:, neg_idx]  # P(pos) - P(neg)
             all_scores.extend(np.round(scores, 4))
 
     df["sentiment_score"] = all_scores

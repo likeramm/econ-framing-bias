@@ -15,6 +15,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    DataCollatorWithPadding,
     EarlyStoppingCallback,
     Trainer,
     TrainingArguments,
@@ -27,11 +28,17 @@ class SentimentAnalyzer:
     MODEL_NAME = "beomi/KcELECTRA-base-v2022"
     MAX_LENGTH = 512
 
+    # 학습 코퍼스(Korean_sentiment)는 영화 리뷰라 최대 146자로 짧다.
+    # 추론 시에는 기사 본문을 다루므로 MAX_LENGTH(512)를 그대로 쓰지만,
+    # 학습까지 512로 패딩하면 연산의 대부분이 패딩 토큰에 쓰인다.
+    TRAIN_MAX_LENGTH = 128
+
     def __init__(self, model_path: str | None = None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.tokenizer = None
         self.model = None
         self.model_path = model_path
+        self.train_max_length = self.TRAIN_MAX_LENGTH
 
     def load_model(self) -> None:
         """모델 로드"""
@@ -144,12 +151,11 @@ class SentimentAnalyzer:
         }
 
     def _tokenize(self, examples):
-        """토큰화"""
+        """학습용 토큰화 (배치 단위 동적 패딩은 DataCollator가 처리)"""
         return self.tokenizer(
             examples["text"],
-            max_length=self.MAX_LENGTH,
+            max_length=self.train_max_length,
             truncation=True,
-            padding="max_length",
         )
 
     def _compute_metrics(self, eval_pred):
@@ -170,6 +176,7 @@ class SentimentAnalyzer:
         learning_rate: float = 5e-5,
         weight_decay: float = 0.01,
         warmup_ratio: float = 0.1,
+        max_length: int | None = None,
         **kwargs,
     ) -> dict:
         """모델 Fine-tuning
@@ -182,6 +189,9 @@ class SentimentAnalyzer:
         Returns:
             학습 결과 메트릭 dict
         """
+        if max_length is not None:
+            self.train_max_length = max_length
+
         if self.tokenizer is None:
             self.tokenizer = AutoTokenizer.from_pretrained(self.MODEL_NAME)
 
@@ -190,9 +200,10 @@ class SentimentAnalyzer:
                 self.MODEL_NAME, num_labels=2,
             ).to(self.device)
 
-        # 토큰화
+        # 토큰화 (패딩 없이 → 배치별 최장 길이에 맞춰 collator가 패딩)
         train_tokenized = train_dataset.map(self._tokenize, batched=True)
         val_tokenized = val_dataset.map(self._tokenize, batched=True)
+        collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
 
         training_args = TrainingArguments(
             output_dir=output_dir,
@@ -219,6 +230,7 @@ class SentimentAnalyzer:
             args=training_args,
             train_dataset=train_tokenized,
             eval_dataset=val_tokenized,
+            data_collator=collator,
             compute_metrics=self._compute_metrics,
             callbacks=[EarlyStoppingCallback(early_stopping_patience=2)],
         )
