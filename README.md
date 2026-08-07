@@ -162,8 +162,13 @@ cp .env.example .env
 ```bash
 cd backend
 python manage.py migrate
+python manage.py load_data     # 파이프라인 CSV → DB 적재
 python manage.py runserver
 ```
+
+`load_data`는 `dataset.csv`, `auto_labeled_full.csv`, `stock_data.csv`,
+`economic_indicators.csv`를 읽어 DB를 채운다. `--flush`로 초기화 후 재적재,
+`--limit N`으로 일부만 적재할 수 있다.
 
 ### Frontend (React)
 
@@ -172,6 +177,18 @@ cd frontend
 npm install
 npm start
 ```
+
+### API 엔드포인트
+
+| 경로 | 설명 |
+|------|------|
+| `GET /api/stats/` | 요약 통계 (기사 수, 분석 수, 기간) |
+| `GET /api/bias-summary/` | 언론사별 평균 편향 (`?core_only=true`) |
+| `GET /api/framing-distribution/` | 프레이밍 유형 분포 (`?media=`) |
+| `GET /api/bias-timeseries/` | 월별 편향 추이 (`?by=media`) |
+| `GET /api/articles/` | 기사 목록 (`?media=&framing=&event_type=&search=&ordering=`) |
+| `GET /api/stock/` | 주가 시계열 (`?ticker=KOSPI`) |
+| `GET /api/analysis-results/` | Phase 3 분석 결과 JSON |
 
 ### 데이터 수집
 
@@ -202,12 +219,29 @@ python scripts/run_analysis.py     # Phase 3 통계 분석 4종
 
 ## 개발 로드맵
 
-- [x] **Phase 1** — 데이터 기반 구축 (뉴스 크롤러, ECOS API, 주가 수집, 6,381건 완료)
-- [x] **Phase 2-1** — NLP 모델 학습 (KLUE-RoBERTa 프레이밍 분류, KcELECTRA 감성 분석)
-- [ ] **Phase 2-2** — 라벨링 보강 및 모델 재학습 (defensive/neutral 클래스 개선)
-- [ ] **Phase 3** — 주가 인과분석 (이벤트 스터디, 그랜저, 매개분석, 패널회귀)
-- [ ] **Phase 4** — 웹 대시보드 (실시간 편향 분석, 언론사 비교, 연구 결과 시각화)
+- [x] **Phase 1** — 데이터 기반 구축 (뉴스 14,135건, ECOS 7종 127개월, 주가 18종 10.5년)
+- [x] **Phase 2-1** — 프레이밍 분류 (KLUE-RoBERTa-large fine-tuned, F1 0.74, 13,886건 라벨링)
+- [x] **Phase 2-2** — 감성 점수 산출 (KR-FinBert-SC) 및 편향 점수 계산
+- [x] **Phase 3** — 주가 인과분석 (이벤트 스터디, 그랜저, 매개분석, 패널회귀)
+- [x] **Phase 4** — 웹 대시보드 (대시보드 / 기사 분석 / 연구 결과)
 - [ ] **Phase 5** — 배포 (AWS EC2) & 논문화
+
+## 분석 결과 요약
+
+| 분석 | 결과 |
+|------|------|
+| **이벤트 스터디** | 물가_인상 CAR −0.0153 (p=0.0024), 환율_달러 −0.0205 (p=0.0069), 경상수지 +0.0124 (p=0.0334). 15개 동시 검정이므로 Bonferroni 보정(p<0.0033) 시 물가_인상만 유의 |
+| **그랜저 인과** | 편향 → 주가 lag 1~5 모두 비유의. 역방향도 비유의 |
+| **매개분석** | 경로 a(편향→CCSI) β=+3.498 (p=0.0327) 유의. 경로 b 비유의로 매개는 불성립 |
+| **패널 회귀** | 섹터×시간 고정효과에서 편향 효과 비유의 (β=−0.000150, p=0.5814) |
+
+### 알려진 한계
+
+- **이벤트일이 대리변수다.** 실제 지표 발표일이 아니라 기사 수 상위 10% 날짜를
+  이벤트일로 쓴다. 기사가 몰린 날은 이미 시장이 움직인 날일 수 있어 내생성 문제가 있다.
+- **감성 모델이 보수적이다.** KR-FinBert-SC가 전체의 81.4%를 중립으로 판정해
+  bias_score의 β=0.35 항이 갖는 변별력이 약하다.
+- **편향 점수 가중치(0.40/0.35/0.25)는 이론적 근거 없이 설정된 값이다.**
 
 ## 분석 방법론
 

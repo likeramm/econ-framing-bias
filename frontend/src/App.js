@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Articles from './pages/Articles';
+import Results from './pages/Results';
 import './App.css';
 
 function App() {
@@ -12,12 +13,14 @@ function App() {
           <div className="nav-links">
             <Link to="/">대시보드</Link>
             <Link to="/articles">기사 분석</Link>
+            <Link to="/results">연구 결과</Link>
           </div>
         </nav>
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/articles" element={<Articles />} />
+            <Route path="/results" element={<Results />} />
           </Routes>
         </main>
       </div>

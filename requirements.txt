@@ -1,5 +1,7 @@
 # ===== Django Backend =====
-django>=5.0.0
+# Django 6.1은 django.utils.cache.cc_delim_re를 제거해 DRF 3.17이 import에
+# 실패한다. DRF가 6.1을 지원할 때까지 상한을 둔다.
+django>=6.0,<6.1
 djangorestframework>=3.14.0
 django-cors-headers>=4.3.0
 

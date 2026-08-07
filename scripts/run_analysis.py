@@ -506,8 +506,18 @@ def main():
     # 결과 저장 디렉토리
     out_dir = Path(PATHS["output_dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
+    results_path = out_dir / "analysis_results.json"
 
+    # 부분 실행(--analysis panel 등)이 다른 분석 결과를 지우지 않도록,
+    # 기존 결과를 읽어 이번에 실행한 항목만 갱신한다.
     all_results = {}
+    if args.analysis != "all" and results_path.exists():
+        try:
+            with open(results_path, encoding="utf-8") as f:
+                all_results = json.load(f)
+            print(f"\n기존 결과 유지: {', '.join(all_results.keys())}")
+        except json.JSONDecodeError:
+            print(f"\n기존 결과 파일을 읽을 수 없어 새로 만듭니다: {results_path}")
 
     # 분석 실행
     if args.analysis in ("event_study", "all"):
@@ -542,12 +552,11 @@ def main():
             return obj
         return str(obj)
 
-    results_path = out_dir / "analysis_results.json"
     with open(results_path, "w", encoding="utf-8") as f:
         json.dump(make_serializable(all_results), f, ensure_ascii=False, indent=2)
 
     print(f"\n{'=' * 60}")
-    print(f"분석 결과 저장: {results_path}")
+    print(f"분석 결과 저장: {results_path} ({', '.join(all_results.keys())})")
     print(f"{'=' * 60}")
 
 

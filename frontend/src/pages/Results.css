@@ -1,0 +1,84 @@
+.results h2 {
+  margin-bottom: 1.5rem;
+  color: #1a1a2e;
+}
+
+.result-panel {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.5rem;
+}
+
+.result-panel h3 {
+  font-size: 1.05rem;
+  color: #1a1a2e;
+  margin-bottom: 0.35rem;
+}
+
+.result-panel .panel-note {
+  font-size: 0.83rem;
+  color: #718096;
+  margin-bottom: 1rem;
+  line-height: 1.55;
+}
+
+.panel-stat {
+  font-size: 0.85rem;
+  color: #4a5568;
+  margin-bottom: 0.75rem;
+}
+
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin-top: 1rem;
+}
+
+.result-table th,
+.result-table td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #edf2f7;
+  text-align: left;
+}
+
+.result-table th {
+  font-size: 0.78rem;
+  color: #718096;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.result-table td.num,
+.result-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-table .dim {
+  color: #a0aec0;
+}
+
+.result-table .pass {
+  color: #1a7f5a;
+  font-weight: 600;
+}
+
+.result-table tr.verdict td {
+  border-bottom: none;
+  padding-top: 0.75rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.empty,
+.empty-state {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  text-align: center;
+  color: #718096;
+}

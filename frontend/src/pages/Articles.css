@@ -3,6 +3,34 @@
   color: #1a1a2e;
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.filters select,
+.filters input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: white;
+  color: #2d3748;
+}
+
+.filters input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.result-count {
+  font-size: 0.85rem;
+  color: #718096;
+  margin-bottom: 0.75rem;
+}
+
 .empty-state {
   background: white;
   padding: 3rem;
@@ -27,6 +55,8 @@
 
 .article-meta {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 1rem;
   margin-bottom: 0.5rem;
   font-size: 0.85rem;
@@ -41,14 +71,32 @@
   color: #a0aec0;
 }
 
+.event-tag {
+  background: #edf2f7;
+  color: #4a5568;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
 .article-card h3 {
   font-size: 1rem;
+  margin-bottom: 0.6rem;
+  line-height: 1.45;
+}
+
+.article-card h3 a {
   color: #2d3748;
-  margin-bottom: 0.5rem;
+  text-decoration: none;
+}
+
+.article-card h3 a:hover {
+  text-decoration: underline;
 }
 
 .framing-badge {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
   font-size: 0.85rem;
@@ -60,11 +108,34 @@
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
+  color: white;
 }
 
-.badge.optimistic { background: #c6f6d5; color: #276749; }
-.badge.pessimistic { background: #fed7d7; color: #9b2c2c; }
-.badge.alarmist { background: #feebc8; color: #9c4221; }
-.badge.defensive { background: #e9d8fd; color: #553c9a; }
-.badge.comparative { background: #bee3f8; color: #2a4365; }
-.badge.neutral { background: #e2e8f0; color: #4a5568; }
+.confidence {
+  color: #a0aec0;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+.pagination button {
+  padding: 0.45rem 1rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  background: white;
+  color: #2d3748;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.pagination button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

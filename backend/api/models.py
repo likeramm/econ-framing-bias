@@ -28,16 +28,25 @@ class EconomicEvent(models.Model):
 
 class Article(models.Model):
     """뉴스 기사"""
+    # 파이프라인 CSV(dataset.csv, auto_labeled_full.csv)의 조인 키.
+    # url로도 식별되지만 라벨 CSV에는 url이 없어 article_id가 필요하다.
+    article_id = models.CharField(max_length=32, unique=True, db_index=True)
     title = models.CharField(max_length=500)
-    content = models.TextField()
-    url = models.URLField(unique=True)
+    content = models.TextField(blank=True)
+    url = models.URLField(max_length=500, unique=True)
     media = models.ForeignKey(Media, on_delete=models.CASCADE, related_name='articles')
     published_at = models.DateTimeField()
     collected_at = models.DateTimeField(auto_now_add=True)
+    # 크롤링 키워드에서 유도된 이벤트 구분(GDP_성장률, 기준금리 등).
+    # EconomicEvent FK와 달리 개별 발표 건이 아니라 주제 분류다.
+    event_type = models.CharField(max_length=50, blank=True, default="", db_index=True)
     event = models.ForeignKey(
         EconomicEvent, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='articles'
     )
+
+    class Meta:
+        indexes = [models.Index(fields=['published_at'])]
 
     def __str__(self):
         return self.title
@@ -55,9 +64,10 @@ class FramingAnalysis(models.Model):
     ]
 
     article = models.OneToOneField(Article, on_delete=models.CASCADE, related_name='framing')
-    framing_type = models.CharField(max_length=20, choices=FRAMING_CHOICES)
+    framing_type = models.CharField(max_length=20, choices=FRAMING_CHOICES, db_index=True)
     confidence = models.FloatField()
     sentiment_score = models.FloatField()  # -1.0 ~ +1.0
+    keyword_polarity = models.FloatField(default=0.0)  # -1.0 ~ +1.0
     bias_score = models.FloatField()  # -3.0 ~ +3.0
     analyzed_at = models.DateTimeField(auto_now_add=True)
 
