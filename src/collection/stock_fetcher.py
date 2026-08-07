@@ -1,11 +1,18 @@
 """주가 데이터 수집 모듈 (yfinance 기반)"""
 
+import argparse
 import warnings
 import pandas as pd
 import yfinance as yf
 from pathlib import Path
 
 warnings.filterwarnings("ignore", category=FutureWarning)
+
+# 뉴스 데이터(2016-03 ~ 2026-03)와 기간을 맞춘다.
+# 이벤트 스터디 추정기간 [-120, -11]을 확보하려면 뉴스 시작일보다 앞서야 하므로
+# 6개월 여유를 두고 2015-09부터 수집한다.
+DEFAULT_START = "2015-09-01"
+DEFAULT_END = "2026-03-07"
 
 
 class StockFetcher:
@@ -92,8 +99,8 @@ class StockFetcher:
 
     def fetch_all(
         self,
-        start_date: str = "2024-09-01",
-        end_date: str = "2026-03-07",
+        start_date: str = DEFAULT_START,
+        end_date: str = DEFAULT_END,
     ) -> pd.DataFrame:
         """모든 종목/지수 일괄 수집"""
         all_dfs = []
@@ -119,21 +126,32 @@ class StockFetcher:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="주가 데이터 수집")
+    parser.add_argument("--start", default=DEFAULT_START, help="시작일 (YYYY-MM-DD)")
+    parser.add_argument("--end", default=DEFAULT_END, help="종료일 (YYYY-MM-DD)")
+    parser.add_argument("--out", default="stock_data.csv", help="저장 파일명")
+    args = parser.parse_args()
+
     fetcher = StockFetcher()
 
     print("=" * 50)
-    print("주가 데이터 수집")
+    print(f"주가 데이터 수집 ({args.start} ~ {args.end})")
     print("=" * 50)
 
-    df = fetcher.fetch_all(start_date="2024-09-01", end_date="2026-03-07")
+    df = fetcher.fetch_all(start_date=args.start, end_date=args.end)
 
     if not df.empty:
-        fetcher.save(df, "stock_data.csv")
+        fetcher.save(df, args.out)
 
         print(f"\n{'=' * 50}")
-        print(f"수집 완료: {len(df)}건")
+        print(f"수집 완료: {len(df):,}건")
         print(f"{'=' * 50}")
 
         for ticker, group in df.groupby("ticker"):
-            latest = group.sort_values("date").iloc[-1]
-            print(f"  {ticker} ({latest['name']}): {latest['close']:,.0f} ({latest['date'].strftime('%Y-%m-%d')})")
+            group = group.sort_values("date")
+            first, latest = group.iloc[0], group.iloc[-1]
+            print(
+                f"  {ticker} ({latest['name']}): {latest['close']:,.0f} "
+                f"| {first['date'].strftime('%Y-%m-%d')} ~ {latest['date'].strftime('%Y-%m-%d')} "
+                f"({len(group):,}일)"
+            )
