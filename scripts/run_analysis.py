@@ -22,6 +22,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 sys.path.insert(0, ".")
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -39,6 +40,7 @@ PATHS = {
     "stock_data": "data/processed/stock_data.csv",
     "economic_indicators": "data/processed/economic_indicators.csv",
     "dataset": "data/processed/dataset.csv",
+    "config": "config/event_sector_map.yaml",
     "output_dir": "data/analysis_results",
 }
 
@@ -49,6 +51,9 @@ CORE_MEDIA = [
     "한국경제", "매일경제", "서울경제",          # 경제지
     "연합뉴스", "SBS",                        # 통신사/방송
 ]
+
+# 시장 벤치마크. 이 티커가 이벤트 대상일 때는 시장모형 대신 평균조정 모형을 쓴다.
+BENCHMARK_TICKER = "KOSPI"
 
 # 이벤트 → 관련 주가 티커 매핑
 EVENT_TICKER_MAP = {
@@ -177,13 +182,14 @@ def run_event_study(df_bias, df_stock, df_econ):
     )
 
     # KOSPI 수익률 (시장 벤치마크)
-    kospi = df_stock[df_stock["ticker"] == "KOSPI"].sort_values("date").reset_index(drop=True)
+    kospi = df_stock[df_stock["ticker"] == BENCHMARK_TICKER].sort_values("date").reset_index(drop=True)
     if len(kospi) == 0:
-        print("  KOSPI 데이터 없음 → 건너뜀")
+        print(f"  {BENCHMARK_TICKER} 데이터 없음 → 건너뜀")
         return {}
 
     market_returns = kospi["return"].astype(float)
-    kospi_dates = kospi["date"]
+
+    print(f"  벤치마크: {BENCHMARK_TICKER} | 대상이 벤치마크와 같으면 평균조정 모형 사용\n")
 
     results = {}
 
@@ -220,15 +226,26 @@ def run_event_study(df_bias, df_stock, df_econ):
         if len(event_indices) == 0:
             continue
 
+        # 대상이 벤치마크 자신이면 시장모형의 잔차가 항등적으로 0이 되므로
+        # 평균조정 모형으로 전환한다.
+        model = "mean_adjusted" if ticker == BENCHMARK_TICKER else "market"
+
         # CAR 계산
-        multi = es.run_multi_events(stock_returns, market_returns, event_indices)
+        multi = es.run_multi_events(stock_returns, market_returns, event_indices, model=model)
         sig = multi["significance_test"]
+        sig["model"] = model
 
         results[event_type] = sig
         star = "***" if sig.get("significant_1pct") else ("**" if sig.get("significant_5pct") else "")
         mean_car = sig.get("mean_car")
         if mean_car is not None:
-            print(f"  {event_type:12s} → {ticker:6s}: CAR={mean_car:+.4f} (n={sig['n']}) {star}")
+            p = sig.get("p_value")
+            p_str = f"p={p:.4f}" if p is not None else "p=N/A"
+            tag = "평균조정" if model == "mean_adjusted" else "시장모형"
+            print(
+                f"  {event_type:12s} → {ticker:6s} [{tag}]: "
+                f"CAR={mean_car:+.4f} ({p_str}, n={sig['n']}) {star}"
+            )
 
     if not results:
         print("  이벤트 스터디 실행 가능한 데이터가 부족합니다.")
@@ -360,19 +377,49 @@ def run_mediation(df_bias, df_stock, df_econ):
 # ══════════════════════════════════════════════════════════
 # 4. 패널 회귀분석
 # ══════════════════════════════════════════════════════════
+def load_event_sector_map():
+    """config/event_sector_map.yaml에서 이벤트 → 섹터 매핑을 읽는다."""
+    with open(PATHS["config"], "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)["event_sector_map"]
+
+
 def run_panel_regression(df_bias, df_stock):
+    """섹터 × 시간 고정효과 패널 회귀.
+
+    분석 단위가 언론사이면 종속변수(시장 수익률)가 같은 달의 모든 언론사에
+    대해 동일해진다. 여기에 시간 고정효과를 넣으면 시간 더미가 종속변수의
+    분산을 남김없이 흡수해 계수가 항등적으로 0이 되고 모형이 식별되지 않는다.
+
+    이벤트-섹터 매핑을 이용해 분석 단위를 섹터로 바꾸면, 같은 달에도 섹터별
+    수익률이 달라지므로 시간 고정효과와 공존하면서 편향 효과를 식별할 수 있다.
+    """
     print("\n" + "=" * 60)
-    print("4. 패널 회귀분석 (언론사 × 시간 고정효과)")
+    print("4. 패널 회귀분석 (섹터 × 시간 고정효과)")
     print("=" * 60)
 
     pr = PanelRegression()
+    sector_map = load_event_sector_map()
 
-    # 언론사별 월별 집계
+    # 주가 데이터가 있는 섹터만 사용
+    available = set(df_stock["ticker"].unique())
+    mapped = {s for sectors in sector_map.values() for s in sectors}
+    usable = mapped & available
+    dropped = mapped - available
+    if dropped:
+        print(f"  주가 데이터 없는 섹터 제외: {', '.join(sorted(dropped))}")
+    print(f"  사용 섹터: {', '.join(sorted(usable))}")
+
+    # 기사를 관련 섹터로 전개 (한 기사가 여러 섹터에 기여)
     df_panel = df_bias.copy()
     df_panel["month"] = df_panel["date"].dt.to_period("M").dt.to_timestamp()
+    df_panel["sector"] = df_panel["event_type"].map(
+        lambda e: [s for s in sector_map.get(e, []) if s in usable]
+    )
+    df_panel = df_panel.explode("sector").dropna(subset=["sector"])
+    print(f"  기사-섹터 관측치: {len(df_panel):,}건 (기사 {df_bias['article_id'].nunique():,}건 전개)")
 
-    monthly_media = (
-        df_panel.groupby(["media_name", "month"])
+    monthly_sector = (
+        df_panel.groupby(["sector", "month"])
         .agg(
             bias_score=("bias_score", "mean"),
             sentiment_score=("sentiment_score", "mean"),
@@ -381,18 +428,27 @@ def run_panel_regression(df_bias, df_stock):
         .reset_index()
     )
 
-    # KOSPI 월별 수익률
-    kospi = df_stock[df_stock["ticker"] == "KOSPI"][["date", "return"]].copy()
-    kospi["return"] = pd.to_numeric(kospi["return"], errors="coerce")
-    kospi["month"] = kospi["date"].dt.to_period("M").dt.to_timestamp()
-    monthly_stock = kospi.groupby("month")["return"].mean().reset_index()
-    monthly_stock.columns = ["month", "stock_return"]
+    # 섹터별 월별 수익률
+    stock = df_stock[df_stock["ticker"].isin(usable)][["date", "ticker", "return"]].copy()
+    stock["return"] = pd.to_numeric(stock["return"], errors="coerce")
+    stock["month"] = stock["date"].dt.to_period("M").dt.to_timestamp()
+    monthly_stock = (
+        stock.groupby(["ticker", "month"])["return"].mean().reset_index()
+    )
+    monthly_stock.columns = ["sector", "month", "stock_return"]
 
     # 병합
-    panel = monthly_media.merge(monthly_stock, on="month", how="inner")
-    panel = panel.rename(columns={"media_name": "entity", "month": "time"})
+    panel = monthly_sector.merge(monthly_stock, on=["sector", "month"], how="inner")
+    panel = panel.rename(columns={"sector": "entity", "month": "time"})
 
-    print(f"  패널 크기: {len(panel)}행 ({panel['entity'].nunique()}개 언론사 × {panel['time'].nunique()}개월)")
+    print(f"  패널 크기: {len(panel)}행 ({panel['entity'].nunique()}개 섹터 × {panel['time'].nunique()}개월)")
+
+    # 식별 가능성 확인: 종속변수가 시간 내에서 변동해야 한다
+    within_var = panel.groupby("time")["stock_return"].nunique()
+    constant_share = (within_var <= 1).mean()
+    print(f"  종속변수가 시간 내 상수인 달: {constant_share:.1%} (0%에 가까워야 식별 가능)")
+    if constant_share > 0.9:
+        print("  경고: 종속변수에 시간 내 변동이 없어 시간 고정효과가 이를 모두 흡수합니다.")
 
     if len(panel) < 20:
         print("  데이터 부족 → 건너뜀")
@@ -406,7 +462,13 @@ def run_panel_regression(df_bias, df_stock):
             independents=["bias_score", "sentiment_score"],
         )
 
-        print(f"\n  R² (within): {result['r2_within']:.4f}")
+        result["identification"] = {
+            "entity": "sector",
+            "dependent_constant_within_time_share": float(constant_share),
+        }
+
+        print(f"\n  관측치: {result['n_obs']} ({result['n_entities']}개 섹터)")
+        print(f"  R² (within): {result['r2_within']:.4f}")
         print(f"  R² (overall): {result['r2_overall']:.4f}")
         print(f"  F-stat: {result['f_stat']:.3f} (p={result['f_pvalue']:.4f})")
         print(f"\n  회귀 계수:")

@@ -33,21 +33,32 @@ class EventStudy:
         stock_returns: pd.Series,
         market_returns: pd.Series,
         event_date_idx: int,
+        model: str = "market",
     ) -> pd.Series | None:
-        """비정상 수익률(AR) 계산 (시장 모형)
+        """비정상 수익률(AR) 계산
 
-        시장 모형: R_i = α + β × R_m + ε
-        추정 기간 데이터로 α, β를 추정하고,
-        이벤트 윈도우에서 AR = R_i - (α + β × R_m) 계산.
+        model="market" (시장 모형):
+            R_i = α + β × R_m + ε
+            추정 기간으로 α, β를 추정하고 AR = R_i - (α + β × R_m).
+
+        model="mean_adjusted" (평균조정 모형):
+            정상 수익률을 추정 기간의 평균 수익률로 보고 AR = R_i - mean(R_i).
+            분석 대상이 시장 지수 자체일 때 쓴다. 시장 지수를 자기 자신에
+            회귀하면 α=0, β=1, 잔차가 항등적으로 0이 되어 AR이 정의상
+            0이 되기 때문이다.
 
         Args:
-            stock_returns: 개별 주식 수익률 시계열
-            market_returns: 시장(KOSPI) 수익률 시계열
+            stock_returns: 개별 주식/지수 수익률 시계열
+            market_returns: 시장(KOSPI) 수익률 시계열.
+                model="mean_adjusted"이면 사용하지 않는다.
             event_date_idx: 이벤트 날짜의 정수 인덱스
+            model: "market" 또는 "mean_adjusted"
 
         Returns:
             이벤트 윈도우 내 비정상 수익률 Series (없으면 None)
         """
+        if model not in ("market", "mean_adjusted"):
+            raise ValueError(f"알 수 없는 모형: {model}")
         est_start = event_date_idx + self.estimation_window[0]
         est_end = event_date_idx + self.estimation_window[1]
         evt_start = event_date_idx + self.event_window[0]
@@ -59,26 +70,29 @@ class EventStudy:
 
         # 추정 기간 데이터
         est_stock = stock_returns.iloc[est_start : est_end + 1].values
-        est_market = market_returns.iloc[est_start : est_end + 1].values
-
-        # 결측치 제거
-        valid = ~(np.isnan(est_stock) | np.isnan(est_market))
-        if valid.sum() < 30:  # 최소 30일 데이터 필요
-            return None
-
-        est_stock = est_stock[valid]
-        est_market = est_market[valid]
-
-        # OLS: R_i = α + β × R_m
-        X = sm.add_constant(est_market)
-        model = sm.OLS(est_stock, X).fit()
-        alpha, beta = model.params
-
-        # 이벤트 윈도우에서 AR 계산
         evt_stock = stock_returns.iloc[evt_start : evt_end + 1]
-        evt_market = market_returns.iloc[evt_start : evt_end + 1]
-        predicted = alpha + beta * evt_market
-        ar = evt_stock - predicted
+
+        if model == "mean_adjusted":
+            valid = ~np.isnan(est_stock)
+            if valid.sum() < 30:  # 최소 30일 데이터 필요
+                return None
+            normal_return = est_stock[valid].mean()
+            ar = evt_stock - normal_return
+        else:
+            est_market = market_returns.iloc[est_start : est_end + 1].values
+
+            # 결측치 제거
+            valid = ~(np.isnan(est_stock) | np.isnan(est_market))
+            if valid.sum() < 30:  # 최소 30일 데이터 필요
+                return None
+
+            # OLS: R_i = α + β × R_m
+            X = sm.add_constant(est_market[valid])
+            fitted = sm.OLS(est_stock[valid], X).fit()
+            alpha, beta = fitted.params
+
+            evt_market = market_returns.iloc[evt_start : evt_end + 1]
+            ar = evt_stock - (alpha + beta * evt_market)
 
         # 상대 일수를 인덱스로
         ar.index = range(self.event_window[0], self.event_window[0] + len(ar))
@@ -145,10 +159,11 @@ class EventStudy:
         stock_returns: pd.Series,
         market_returns: pd.Series,
         event_date_idx: int,
+        model: str = "market",
     ) -> dict:
         """단일 이벤트에 대한 전체 분석"""
         ar = self.calculate_abnormal_returns(
-            stock_returns, market_returns, event_date_idx
+            stock_returns, market_returns, event_date_idx, model=model
         )
         car = self.calculate_car(ar)
         return {
@@ -162,11 +177,12 @@ class EventStudy:
         stock_returns: pd.Series,
         market_returns: pd.Series,
         event_date_indices: list[int],
+        model: str = "market",
     ) -> dict:
         """여러 이벤트에 대한 종합 분석"""
         results = []
         for idx in event_date_indices:
-            res = self.run_single_event(stock_returns, market_returns, idx)
+            res = self.run_single_event(stock_returns, market_returns, idx, model=model)
             results.append(res)
 
         cars = [r["car"] for r in results]
