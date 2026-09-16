@@ -9,17 +9,14 @@ class BiasScorer:
     """언론사별 편향 점수 산출기
 
     Bias Score = α × framing_type_score + β × sentiment_intensity + γ × keyword_polarity
-    최종 범위: -3 (극부정) ~ +3 (극긍정)
+    최종 범위: -1 (극부정) ~ +1 (극긍정)
     """
 
     # 프레이밍 유형별 점수 매핑
     FRAMING_SCORES = {
-        "optimistic": 2,
-        "defensive": 1,
-        "comparative": 0,
+        "positive": 1,
         "neutral": 0,
-        "pessimistic": -1,
-        "alarmist": -2,
+        "negative": -1,
     }
 
     def __init__(self, config_path: str = "config/event_sector_map.yaml"):
@@ -43,7 +40,7 @@ class BiasScorer:
             + self.beta * sentiment_score
             + self.gamma * keyword_polarity
         )
-        return np.clip(score, -3, 3)
+        return np.clip(score, -1, 1)
 
     def calculate_event_bias_variance(
         self, bias_scores: list[float]

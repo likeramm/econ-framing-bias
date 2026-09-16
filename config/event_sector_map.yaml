@@ -70,12 +70,9 @@ event_study:
 
 # 프레이밍 유형 분류
 framing_types:
-  - optimistic      # 낙관적
-  - pessimistic     # 비관적
-  - alarmist        # 경고적
-  - defensive       # 방어적
-  - comparative     # 비교적
-  - neutral         # 중립적
+  - negative        # 부정
+  - neutral         # 중립
+  - positive        # 긍정
 
 # 편향 점수 가중치
 bias_weights:

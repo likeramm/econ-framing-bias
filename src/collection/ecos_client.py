@@ -134,7 +134,7 @@ class ECOSClient:
     def get_indicator(
         self,
         indicator_key: str,
-        start_date: str = "202409",
+        start_date: str = "201601",
         end_date: str = "202603",
     ) -> pd.DataFrame:
         """사전 정의된 경제 지표 조회
@@ -164,7 +164,7 @@ class ECOSClient:
 
     def get_all_indicators(
         self,
-        start_date: str = "202409",
+        start_date: str = "201601",
         end_date: str = "202603",
     ) -> pd.DataFrame:
         """모든 주요 경제 지표 일괄 조회"""
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     print("ECOS 경제 지표 수집")
     print("=" * 50)
 
-    df = client.get_all_indicators(start_date="202409", end_date="202603")
+    df = client.get_all_indicators(start_date="201601", end_date="202603")
 
     if not df.empty:
         client.save(df, "economic_indicators.csv")

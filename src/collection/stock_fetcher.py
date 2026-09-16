@@ -60,7 +60,7 @@ class StockFetcher:
         yahoo_code = info["yahoo"]
 
         try:
-            df = yf.download(yahoo_code, start=start_date, end=end_date, progress=False)
+            df = yf.download(yahoo_code, start=start_date, end=end_date, progress=False, auto_adjust=True)
         except Exception as e:
             print(f"  [{ticker_key}] 수집 실패: {e}")
             return pd.DataFrame()
@@ -92,7 +92,7 @@ class StockFetcher:
 
     def fetch_all(
         self,
-        start_date: str = "2024-09-01",
+        start_date: str = "2016-01-01",
         end_date: str = "2026-03-07",
     ) -> pd.DataFrame:
         """모든 종목/지수 일괄 수집"""
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     print("주가 데이터 수집")
     print("=" * 50)
 
-    df = fetcher.fetch_all(start_date="2024-09-01", end_date="2026-03-07")
+    df = fetcher.fetch_all(start_date="2016-01-01", end_date="2026-03-07")
 
     if not df.empty:
         fetcher.save(df, "stock_data.csv")

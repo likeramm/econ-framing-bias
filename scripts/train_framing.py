@@ -38,7 +38,7 @@ DEFAULT_NUM_WORKERS = 0 if IS_WINDOWS else 2
 # ══════════════════════════════════════════════════════════
 # 설정
 # ══════════════════════════════════════════════════════════
-LABELS = ["alarmist", "comparative", "defensive", "neutral", "optimistic", "pessimistic"]
+LABELS = ["negative", "neutral", "positive"]
 LABEL2ID = {l: i for i, l in enumerate(LABELS)}
 ID2LABEL = {i: l for i, l in enumerate(LABELS)}
 

@@ -1,0 +1,5 @@
+﻿article_id,_error
+c3b766943419,"Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-GVcEj2x5ngF9yl79SuxFgKrX on tokens per min (TPM): Limit 30000, Used 29443, Requested 600. Please try again in"
+4a40e5878eea,"Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-GVcEj2x5ngF9yl79SuxFgKrX on tokens per min (TPM): Limit 30000, Used 29408, Requested 631. Please try again in"
+296b5853b1f7,"Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-GVcEj2x5ngF9yl79SuxFgKrX on tokens per min (TPM): Limit 30000, Used 29394, Requested 603. Please try again in"
+2c5f4b61ec79,"Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-GVcEj2x5ngF9yl79SuxFgKrX on tokens per min (TPM): Limit 30000, Used 29926, Requested 627. Please try again in"

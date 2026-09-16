@@ -20,12 +20,9 @@ from transformers import (
 
 # 프레이밍 유형 레이블
 FRAMING_LABELS = [
-    "optimistic",    # 낙관적
-    "pessimistic",   # 비관적
-    "alarmist",      # 경고적
-    "defensive",     # 방어적
-    "comparative",   # 비교적
-    "neutral",       # 중립적
+    "negative",   # 부정
+    "neutral",    # 중립
+    "positive",   # 긍정
 ]
 
 LABEL2ID = {label: i for i, label in enumerate(FRAMING_LABELS)}
