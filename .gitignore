@@ -63,3 +63,6 @@ Thumbs.db
 # 정리
 *.pyc
 ~$*
+
+# LLM Batch API 요청 파일/상태 (로컬 전용)
+data/labeled/batch/
