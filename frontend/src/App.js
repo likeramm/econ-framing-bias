@@ -8,7 +8,7 @@ function App() {
     <Router>
       <div className="App">
         <nav className="navbar">
-          <h1 className="logo">경제뉴스 프레이밍 편향 탐지기</h1>
+          <h1 className="logo">경제 뉴스 편향 탐지 및 주가 영향 분석 시스템</h1>
           <div className="nav-links">
             <Link to="/">대시보드</Link>
             <Link to="/articles">기사 분석</Link>
