@@ -118,9 +118,9 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-# CORS 설정
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
+# CORS 설정 — 로컬 개발 서버는 포트가 바뀔 수 있어 localhost/127.0.0.1 전체 포트 허용
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r'^http://(localhost|127\.0\.0\.1)(:\d+)?$',
 ]
 
 # DRF 설정

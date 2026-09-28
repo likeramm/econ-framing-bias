@@ -3,79 +3,49 @@ from django.db import models
 
 class Media(models.Model):
     """언론사"""
-    name = models.CharField(max_length=50)
-    code = models.CharField(max_length=10, unique=True)
-    category = models.CharField(max_length=20)  # conservative, progressive, economic, neutral
+    name = models.CharField(max_length=50, unique=True)
+    group = models.CharField(max_length=20)  # 경제지, 보수, 진보, 통신사/방송, 기타
 
     class Meta:
         verbose_name_plural = "media"
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
 
 
-class EconomicEvent(models.Model):
-    """경제 이벤트 (지표 발표)"""
-    event_type = models.CharField(max_length=50)  # GDP_성장률, 기준금리 등
-    title = models.CharField(max_length=200)
-    date = models.DateField()
-    value = models.FloatField(null=True, blank=True)
-    description = models.TextField(blank=True)
-
-    def __str__(self):
-        return f"{self.event_type} - {self.date}"
-
-
 class Article(models.Model):
     """뉴스 기사"""
+    article_id = models.CharField(max_length=32, unique=True)  # 수집 단계의 해시 ID
     title = models.CharField(max_length=500)
-    content = models.TextField()
-    url = models.URLField(unique=True)
-    media = models.ForeignKey(Media, on_delete=models.CASCADE, related_name='articles')
-    published_at = models.DateTimeField()
-    collected_at = models.DateTimeField(auto_now_add=True)
-    event = models.ForeignKey(
-        EconomicEvent, on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='articles'
-    )
+    content = models.TextField(blank=True)
+    url = models.URLField(max_length=1000, blank=True)
+    media = models.ForeignKey(Media, on_delete=models.CASCADE, related_name="articles")
+    event_type = models.CharField(max_length=50, db_index=True)  # GDP_성장률, 기준금리 등
+    date = models.DateField(null=True, db_index=True)
+
+    class Meta:
+        ordering = ["-date", "id"]
 
     def __str__(self):
         return self.title
 
 
 class FramingAnalysis(models.Model):
-    """프레이밍 분석 결과"""
-    FRAMING_CHOICES = [
-        ('optimistic', '낙관적'),
-        ('pessimistic', '비관적'),
-        ('alarmist', '경고적'),
-        ('defensive', '방어적'),
-        ('comparative', '비교적'),
-        ('neutral', '중립적'),
+    """프레이밍 분석 결과 (gpt-5.5 3-class 라벨 + 감성·키워드·편향 점수)"""
+    LABEL_CHOICES = [
+        ("positive", "긍정"),
+        ("neutral", "중립"),
+        ("negative", "부정"),
     ]
 
-    article = models.OneToOneField(Article, on_delete=models.CASCADE, related_name='framing')
-    framing_type = models.CharField(max_length=20, choices=FRAMING_CHOICES)
-    confidence = models.FloatField()
-    sentiment_score = models.FloatField()  # -1.0 ~ +1.0
-    bias_score = models.FloatField()  # -3.0 ~ +3.0
-    analyzed_at = models.DateTimeField(auto_now_add=True)
+    article = models.OneToOneField(Article, on_delete=models.CASCADE, related_name="framing")
+    label = models.CharField(max_length=10, choices=LABEL_CHOICES, db_index=True)
+    confidence = models.FloatField(null=True)
+    reason = models.TextField(blank=True)  # LLM 판단 근거 (적용 규칙)
+    sentiment_score = models.FloatField()  # -1.0 ~ +1.0 (KcELECTRA)
+    keyword_polarity = models.FloatField()  # -1.0 ~ +1.0 (경제 극성 사전)
+    bias_score = models.FloatField(db_index=True)  # -3.0 ~ +3.0
 
     def __str__(self):
-        return f"{self.article.title[:30]} - {self.framing_type}"
-
-
-class StockData(models.Model):
-    """주가 데이터"""
-    ticker = models.CharField(max_length=20)
-    name = models.CharField(max_length=50)
-    date = models.DateField()
-    close_price = models.FloatField()
-    volume = models.BigIntegerField()
-    change_rate = models.FloatField()  # 수익률
-
-    class Meta:
-        unique_together = ('ticker', 'date')
-
-    def __str__(self):
-        return f"{self.name} - {self.date}"
+        return f"{self.article.title[:30]} - {self.label}"

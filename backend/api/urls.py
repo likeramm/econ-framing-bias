@@ -1,14 +1,14 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+
 from . import views
 
 router = DefaultRouter()
-router.register(r'media', views.MediaViewSet)
-router.register(r'events', views.EconomicEventViewSet)
-router.register(r'articles', views.ArticleViewSet)
+router.register(r"articles", views.ArticleViewSet, basename="article")
 
 urlpatterns = [
-    path('', include(router.urls)),
-    path('bias-summary/', views.bias_summary, name='bias-summary'),
-    path('health/', views.health_check, name='health-check'),
+    path("", include(router.urls)),
+    path("filters/", views.filter_options, name="filter-options"),
+    path("classify/", views.classify, name="classify"),
+    path("health/", views.health_check, name="health-check"),
 ]
