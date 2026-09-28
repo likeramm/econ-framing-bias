@@ -1,12 +1,12 @@
-"""KLUE-RoBERTa 프레이밍 분류 모델 학습
+"""KLUE-RoBERTa 프레이밍 분류 모델 학습 (3-class)
 
-수동 라벨 + 고신뢰도 자동 라벨 데이터로 파인튜닝.
+gpt-5.5 LLM 라벨(llm_labeled.csv)로 파인튜닝한다 (LLM → 소형 모델 증류).
+골든셋(data/goldset/*.csv) 기사는 이후 사람 기준 평가를 위해 학습에서 제외한다.
+데이터는 train/val/test = 70/15/15 로 나누고, val 로 최고 모델을 고른 뒤
+최종 성능은 한 번도 보지 않은 test 로 보고한다.
 
 사용법:
   python scripts/train_framing.py
-
-자동 라벨링은 별도 스크립트:
-  python scripts/auto_label.py
 """
 
 import os
@@ -44,18 +44,21 @@ ID2LABEL = {i: l for i, l in enumerate(LABELS)}
 
 CONFIG = {
     "model_name": "klue/roberta-large",
-    "max_length": 512,
+    # 512 는 RTX 4060(8GB) VRAM 한도에 닿아 시스템 메모리로 넘치며 ~1.3s/step 까지 느려짐.
+    # 제목 + 본문 앞부분이 대부분 들어가는 256 으로 제한.
+    "max_length": 256,
     "batch_size": 4,
     "gradient_accumulation_steps": 2,
-    "epochs": 15,
+    "epochs": 6,
+    "patience": 2,             # val macro-F1 이 이만큼 연속으로 안 오르면 조기 종료
     "lr": 1e-5,
     "warmup_ratio": 0.1,
     "weight_decay": 0.01,
+    "val_size": 0.15,
     "test_size": 0.15,
     "random_seed": 42,
-    "labeled_path": "data/labeled/labeled_3000.csv",
-    "auto_label_path": "data/labeled/auto_labeled_full.csv",
-    "min_auto_confidence": 0.95,
+    "llm_label_path": "data/labeled/llm_labeled.csv",
+    "goldset_dir": "data/goldset",
     "full_data_path": "data/processed/dataset.csv",
     "model_save_path": "models/framing/best",
 }
@@ -105,34 +108,26 @@ def train():
     pin_memory = device.type == "cuda"
     print(f"Device: {device} | AMP(FP16): {use_amp}")
 
-    # 1. 데이터 로드 (수동 라벨 + 고신뢰도 자동 라벨)
-    df_manual = pd.read_csv(cfg["labeled_path"])
-    df_manual = df_manual.dropna(subset=["title_clean", "framing_label"])
-    df_manual = df_manual[df_manual["framing_label"].isin(LABELS)].copy()
-    print(f"수동 라벨: {len(df_manual)}건")
+    # 1. 데이터 로드 (LLM 라벨)
+    df = pd.read_csv(cfg["llm_label_path"])
+    df = df[df["framing_label"].isin(LABELS)][["article_id", "framing_label"]]
+    print(f"LLM 라벨: {len(df)}건")
 
-    # 자동 라벨 중 고신뢰도만 추가 (수동 라벨과 중복 제외)
-    auto_path = cfg.get("auto_label_path", "data/labeled/auto_labeled_full.csv")
-    min_conf = cfg.get("min_auto_confidence", 0.95)
-    if Path(auto_path).exists():
-        df_auto = pd.read_csv(auto_path)
-        df_auto = df_auto.dropna(subset=["title_clean", "framing_label"])
-        df_auto = df_auto[df_auto["framing_label"].isin(LABELS)]
-        manual_ids = set(df_manual["article_id"])
-        df_auto = df_auto[~df_auto["article_id"].isin(manual_ids)]
-        df_auto = df_auto[df_auto["confidence"] >= min_conf].copy()
-        print(f"자동 라벨 (confidence >= {min_conf}): {len(df_auto)}건")
-        df = pd.concat([
-            df_manual[["article_id", "title_clean", "framing_label"]],
-            df_auto[["article_id", "title_clean", "framing_label"]],
-        ], ignore_index=True)
-    else:
-        print("자동 라벨 파일 없음 → 수동 라벨만 사용")
-        df = df_manual[["article_id", "title_clean", "framing_label"]].copy()
+    # 골든셋 기사 제외 (사람 라벨 기준 평가에 쓸 것이므로 학습에 섞이면 안 됨)
+    gold_ids = set()
+    for p in Path(cfg["goldset_dir"]).glob("*.csv"):
+        g = pd.read_csv(p)
+        if "article_id" in g.columns:
+            gold_ids |= set(g["article_id"].dropna())
+    before = len(df)
+    df = df[~df["article_id"].isin(gold_ids)]
+    print(f"골든셋 기사 제외: {before - len(df)}건 (골든셋 전체 {len(gold_ids)}건)")
 
-    # 본문(content) 결합: dataset.csv에서 content_clean 매핑
-    df_full = pd.read_csv(cfg["full_data_path"], usecols=["article_id", "content_clean", "media_name"])
-    df = df.merge(df_full, on="article_id", how="left")
+    # 제목·본문 결합: dataset.csv에서 title_clean, content_clean 매핑
+    df_full = pd.read_csv(
+        cfg["full_data_path"], usecols=["article_id", "title_clean", "content_clean", "media_name"]
+    )
+    df = df.merge(df_full, on="article_id", how="left").dropna(subset=["title_clean"])
 
     # 중복 content 처리: 매일경제TV/서울경제TV 등 크롤링 오류 매체는 content 제거
     BAD_CONTENT_MEDIA = ["매일경제TV", "서울경제TV", "미주중앙일보"]
@@ -169,14 +164,20 @@ def train():
     texts = df["text"].tolist()
     label_ids = [LABEL2ID[l] for l in df["framing_label"]]
 
-    # 2. Train/Val 분할
-    tr_texts, val_texts, tr_labels, val_labels = train_test_split(
+    # 2. Train/Val/Test 분할 (val: 모델 선택, test: 최종 보고)
+    rest_texts, te_texts, rest_labels, te_labels = train_test_split(
         texts, label_ids,
         test_size=cfg["test_size"],
         random_state=cfg["random_seed"],
         stratify=label_ids,
     )
-    print(f"Train: {len(tr_texts)}, Val: {len(val_texts)}")
+    tr_texts, val_texts, tr_labels, val_labels = train_test_split(
+        rest_texts, rest_labels,
+        test_size=cfg["val_size"] / (1 - cfg["test_size"]),
+        random_state=cfg["random_seed"],
+        stratify=rest_labels,
+    )
+    print(f"Train: {len(tr_texts)}, Val: {len(val_texts)}, Test: {len(te_texts)}")
 
     # 3. 토크나이저 & 모델
     tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
@@ -221,6 +222,13 @@ def train():
         pin_memory=pin_memory,
         persistent_workers=persistent,
     )
+    te_loader = DataLoader(
+        FramingDataset(te_texts, te_labels, tokenizer, cfg["max_length"]),
+        batch_size=cfg["batch_size"] * 2,
+        collate_fn=collator,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
 
     # 6. Optimizer & Scheduler
     optimizer = torch.optim.AdamW(
@@ -233,6 +241,7 @@ def train():
 
     # 7. 학습 루프
     best_f1 = 0.0
+    no_improve = 0
     save_path = Path(cfg["model_save_path"])
     save_path.mkdir(parents=True, exist_ok=True)
 
@@ -292,19 +301,25 @@ def train():
 
         if f1 > best_f1:
             best_f1 = f1
+            no_improve = 0
             model.save_pretrained(save_path)
             tokenizer.save_pretrained(save_path)
             print(f"  → Best model 저장 (f1={best_f1:.4f})")
+        else:
+            no_improve += 1
+            if no_improve >= cfg["patience"]:
+                print(f"  → {cfg['patience']} epoch 연속 개선 없음 — 조기 종료")
+                break
 
     print(f"\n최고 Macro F1: {best_f1:.4f}")
 
-    # 8. 최종 평가
-    print("\n=== 최종 분류 리포트 ===")
+    # 8. 최종 평가 (test: 모델 선택에 쓰지 않은 데이터)
+    print("\n=== 최종 분류 리포트 (Test) ===")
     model = AutoModelForSequenceClassification.from_pretrained(save_path)
     model.to(device).eval()
     preds, trues = [], []
     with torch.no_grad():
-        for batch in val_loader:
+        for batch in te_loader:
             input_ids = batch["input_ids"].to(device, non_blocking=True)
             attn_mask = batch["attention_mask"].to(device, non_blocking=True)
             with autocast("cuda", dtype=torch.float16, enabled=use_amp):
