@@ -1,0 +1,299 @@
+{
+  "event_study": {
+    "GDP_성장률": {
+      "n": 39,
+      "mean_car": -0.005764554537188012,
+      "std_car": 0.03143210146545881,
+      "t_stat": -1.1453141809801695,
+      "p_value": 0.2592412167533465,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "기준금리": {
+      "n": 28,
+      "mean_car": -0.008584942819796378,
+      "std_car": 0.036051518476256636,
+      "t_stat": -1.2600647451701599,
+      "p_value": 0.21842853754568797,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "소비자물가": {
+      "n": 13,
+      "mean_car": 0.001112832276754639,
+      "std_car": 0.022477702130527136,
+      "t_stat": 0.17850462700904596,
+      "p_value": 0.8613048553986984,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "수출입동향": {
+      "n": 5,
+      "mean_car": -0.006135664731771904,
+      "std_car": 0.023797850395007467,
+      "t_stat": -0.5765127185717687,
+      "p_value": 0.5951565491544178,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "고용동향": {
+      "n": 33,
+      "mean_car": -0.0033157197323683634,
+      "std_car": 0.03339949006536963,
+      "t_stat": -0.5702889380548263,
+      "p_value": 0.5724645751488678,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "부동산가격": {
+      "n": 38,
+      "mean_car": 0.008251539496502903,
+      "std_car": 0.03770997057740805,
+      "t_stat": 1.348871527594554,
+      "p_value": 0.18557629728695058,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "환율_달러": {
+      "n": 22,
+      "mean_car": -0.022066426656105597,
+      "std_car": 0.028125662372985284,
+      "t_stat": -3.679938768311391,
+      "p_value": 0.0013929009934831797,
+      "significant_5pct": true,
+      "significant_1pct": true
+    },
+    "반도체_수출": {
+      "n": 24,
+      "mean_car": -0.006876596392428393,
+      "std_car": 0.027731445901342112,
+      "t_stat": -1.2148051990104094,
+      "p_value": 0.23676518710188507,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "가계부채": {
+      "n": 32,
+      "mean_car": -0.0006763855075413994,
+      "std_car": 0.03712093580224026,
+      "t_stat": -0.10307429352036195,
+      "p_value": 0.9185679249469247,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "경상수지": {
+      "n": 19,
+      "mean_car": 0.0095315562886482,
+      "std_car": 0.0357816329432934,
+      "t_stat": 1.1611289709089232,
+      "p_value": 0.26075688713337497,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "국채_금리": {
+      "n": 36,
+      "mean_car": -0.0042168740087094,
+      "std_car": 0.04196270802324983,
+      "t_stat": -0.6029459309022195,
+      "p_value": 0.5504319674472937,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "물가_인상": {
+      "n": 31,
+      "mean_car": -0.015269514029169194,
+      "std_car": 0.025656253134426186,
+      "t_stat": -3.313697273093371,
+      "p_value": 0.002411638615675728,
+      "significant_5pct": true,
+      "significant_1pct": true
+    },
+    "경기침체": {
+      "n": 34,
+      "mean_car": -0.005543667677156246,
+      "std_car": 0.01988628266315091,
+      "t_stat": -1.6254852701256484,
+      "p_value": 0.11357303004321521,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "부동산_대출": {
+      "n": 55,
+      "mean_car": 0.002280825356495034,
+      "std_car": 0.03176351803304068,
+      "t_stat": 0.5325308594776157,
+      "p_value": 0.5965429844466906,
+      "significant_5pct": false,
+      "significant_1pct": false
+    },
+    "최저임금": {
+      "n": 37,
+      "mean_car": -0.001826561825270272,
+      "std_car": 0.0291419138039284,
+      "t_stat": -0.38125642347241473,
+      "p_value": 0.7052539013116247,
+      "significant_5pct": false,
+      "significant_1pct": false
+    }
+  },
+  "granger": {
+    "bias_to_stock": {
+      "n_obs": 1038,
+      "max_lag": 5,
+      "stationarity": {
+        "bias": {
+          "name": "bias",
+          "adf_stat": -16.546622958224983,
+          "p_value": 1.9619962564133437e-29,
+          "is_stationary": true,
+          "n_obs": 1038
+        },
+        "stock": {
+          "name": "stock",
+          "adf_stat": -7.090009037204424,
+          "p_value": 4.4353986061278284e-10,
+          "is_stationary": true,
+          "n_obs": 1038
+        }
+      },
+      "lag_results": {
+        "1": {
+          "f_stat": 0.4589796539777166,
+          "p_value": 0.49825277161401077,
+          "significant_5pct": false,
+          "significant_1pct": false
+        },
+        "2": {
+          "f_stat": 0.9828060553726647,
+          "p_value": 0.3746097807341893,
+          "significant_5pct": false,
+          "significant_1pct": false
+        },
+        "3": {
+          "f_stat": 0.7727284971643652,
+          "p_value": 0.5093289543299859,
+          "significant_5pct": false,
+          "significant_1pct": false
+        },
+        "4": {
+          "f_stat": 0.6431843980272186,
+          "p_value": 0.6317876950759782,
+          "significant_5pct": false,
+          "significant_1pct": false
+        },
+        "5": {
+          "f_stat": 0.6091564971370267,
+          "p_value": 0.6929382021835995,
+          "significant_5pct": false,
+          "significant_1pct": false
+        }
+      },
+      "best_lag": 2,
+      "best_p_value": 0.3746097807341893,
+      "significant": false
+    },
+    "stock_to_bias": {
+      "n_obs": 1038,
+      "max_lag": 5,
+      "stationarity": {
+        "bias": {
+          "name": "bias",
+          "adf_stat": -7.090009037204424,
+          "p_value": 4.4353986061278284e-10,
+          "is_stationary": true,
+          "n_obs": 1038
+        },
+        "stock": {
+          "name": "stock",
+          "adf_stat": -16.546622958224983,
+          "p_value": 1.9619962564133437e-29,
+          "is_stationary": true,
+          "n_obs": 1038
+        }
+      },
+      "lag_results": {
+        "1": {
+          "f_stat": 6.024388821626427,
+          "p_value": 0.014273447688751545,
+          "significant_5pct": true,
+          "significant_1pct": false
+        },
+        "2": {
+          "f_stat": 3.122777051158635,
+          "p_value": 0.04445150077140785,
+          "significant_5pct": true,
+          "significant_1pct": false
+        },
+        "3": {
+          "f_stat": 1.9243743047859905,
+          "p_value": 0.12390115727327887,
+          "significant_5pct": false,
+          "significant_1pct": false
+        },
+        "4": {
+          "f_stat": 1.4575144812188718,
+          "p_value": 0.2130630025637393,
+          "significant_5pct": false,
+          "significant_1pct": false
+        },
+        "5": {
+          "f_stat": 1.1798183381712588,
+          "p_value": 0.31699441061605915,
+          "significant_5pct": false,
+          "significant_1pct": false
+        }
+      },
+      "best_lag": 1,
+      "best_p_value": 0.014273447688751545,
+      "significant": true
+    }
+  },
+  "mediation": {
+    "n_obs": 110,
+    "total_effect_c": -0.0006224439246652466,
+    "total_effect_p": 0.28418864432725127,
+    "path_a": 3.447946525909895,
+    "path_a_p": 0.0068801036636465165,
+    "path_a_significant": true,
+    "path_b": 8.778281998912773e-06,
+    "path_b_p": 0.844586314647941,
+    "path_b_significant": false,
+    "direct_effect": -0.000652710971586855,
+    "direct_effect_p": 0.27988453258468615,
+    "indirect_effect": 3.0267046921608668e-05,
+    "sobel_z": 0.19600893167570532,
+    "sobel_p": 0.8446031751352288,
+    "indirect_significant": false,
+    "mediation_ratio": -0.048626142407746105,
+    "significant_mediation": false,
+    "r2_total": 0.010612424485869854,
+    "r2_full": 0.010969352654833564
+  },
+  "panel": {
+    "n_obs": 818,
+    "n_entities": 10,
+    "coefficients": {
+      "bias_score": {
+        "coefficient": 0.0002648181944052631,
+        "std_error": 0.0002884292372137686,
+        "t_stat": 0.9181392183518268,
+        "p_value": 0.35882064582313333,
+        "significant_5pct": false,
+        "significant_1pct": false
+      },
+      "sentiment_score": {
+        "coefficient": -0.0006230908450018143,
+        "std_error": 0.0006329635344686748,
+        "t_stat": -0.9844024356392854,
+        "p_value": 0.32521308376250313,
+        "significant_5pct": false,
+        "significant_1pct": false
+      }
+    },
+    "r2_within": 0.0019371712591322865,
+    "r2_overall": 0.0014999150257722915,
+    "f_stat": 0.7821952636139975,
+    "f_pvalue": 0.45774768589420844,
+    "summary": "                          PanelOLS Estimation Summary                           \n================================================================================\nDep. Variable:           stock_return   R-squared:                        0.0019\nEstimator:                   PanelOLS   R-squared (Between):             -0.1252\nNo. Observations:                 818   R-squared (Within):               0.0019\nDate:                Mon, Sep 28 2026   R-squared (Overall):              0.0015\nTime:                        22:44:15   Log-likelihood                    3350.5\nCov. Estimator:             Clustered                                           \n                                        F-statistic:                      0.7822\nEntities:                          10   P-value                           0.4577\nAvg Obs:                       81.800   Distribution:                   F(2,806)\nMin Obs:                       53.000                                           \nMax Obs:                       103.00   F-statistic (robust):             0.4954\n                                        P-value                           0.6095\nTime periods:                     110   Distribution:                   F(2,806)\nAvg Obs:                       7.4364                                           \nMin Obs:                       1.0000                                           \nMax Obs:                      10.0000                                           \n                                                                                \n                                Parameter Estimates                                \n===================================================================================\n                 Parameter  Std. Err.     T-stat    P-value    Lower CI    Upper CI\n-----------------------------------------------------------------------------------\nbias_score          0.0003     0.0003     0.9181     0.3588     -0.0003      0.0008\nsentiment_score    -0.0006     0.0006    -0.9844     0.3252     -0.0019      0.0006\n===================================================================================\n\nF-test for Poolability: 0.1757\nP-value: 0.9965\nDistribution: F(9,806)\n\nIncluded effects: Entity"
+  }
+}
