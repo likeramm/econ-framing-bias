@@ -1,7 +1,8 @@
 """전체 데이터셋에 감성 점수(sentiment_score) 부여
 
 학습된 KcELECTRA 모델로 기사별 감성 강도(-1.0 ~ +1.0)를 산출하여
-auto_labeled_full.csv에 sentiment_score 컬럼을 추가한다.
+LLM 프레이밍 라벨(llm_labeled.csv)에 sentiment_score 컬럼을 추가한
+bias_scored.csv를 만든다. (llm_labeled.csv 원본은 수정하지 않음)
 
 사용법:
   python scripts/sentiment_score.py
@@ -37,9 +38,9 @@ DEFAULT_NUM_WORKERS = 0 if IS_WINDOWS else 2
 CONFIG = {
     "model_path": "models/sentiment/best",
     "max_length": 512,
-    "input_path": "data/labeled/auto_labeled_full.csv",
+    "input_path": "data/labeled/llm_labeled.csv",
     "full_data_path": "data/processed/dataset.csv",
-    "output_path": "data/labeled/auto_labeled_full.csv",
+    "output_path": "data/labeled/bias_scored.csv",
 }
 
 BAD_CONTENT_MEDIA = ["매일경제TV", "서울경제TV", "미주중앙일보"]
@@ -124,9 +125,9 @@ def run_sentiment(model_path: str, batch_size: int = 64):
     # content 결합을 위해 dataset.csv 매핑
     full_path = cfg["full_data_path"]
     if Path(full_path).exists():
-        df_full = pd.read_csv(full_path, usecols=["article_id", "content_clean", "media_name"])
+        df_full = pd.read_csv(full_path, usecols=["article_id", "title_clean", "content_clean", "media_name"])
         # input_path에 이미 media_name이 있을 수 있으므로 중복 방지
-        merge_cols = ["article_id", "content_clean"]
+        merge_cols = ["article_id", "title_clean", "content_clean"]
         if "media_name" not in df.columns:
             merge_cols.append("media_name")
         df = df.merge(df_full[merge_cols], on="article_id", how="left")
@@ -177,7 +178,7 @@ def run_sentiment(model_path: str, batch_size: int = 64):
     # 결과 저장 (기존 컬럼 + sentiment_score, sentiment_label 추가)
     out_cols = [c for c in [
         "article_id", "title", "title_clean",
-        "framing_label", "confidence",
+        "framing_label", "framing_label_kr", "confidence",
         "sentiment_score", "sentiment_label",
         "media_name", "media_group", "event_type", "date",
     ] if c in df.columns]

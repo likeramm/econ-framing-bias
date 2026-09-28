@@ -1,6 +1,6 @@
 """편향 점수(Bias Score) 산출
 
-auto_labeled_full.csv에 이미 포함된 framing_label + sentiment_score를 기반으로
+bias_scored.csv(sentiment_score.py 출력)의 framing_label + sentiment_score를 기반으로
 keyword_polarity를 추가 산출한 뒤, 최종 bias_score를 계산한다.
 
 공식:
@@ -24,10 +24,10 @@ import yaml
 # 설정
 # ══════════════════════════════════════════════════════════
 CONFIG = {
-    "input_path": "data/labeled/auto_labeled_full.csv",
+    "input_path": "data/labeled/bias_scored.csv",
     "full_data_path": "data/processed/dataset.csv",
     "config_path": "config/event_sector_map.yaml",
-    "output_path": "data/labeled/auto_labeled_full.csv",
+    "output_path": "data/labeled/bias_scored.csv",
 }
 
 FRAMING_SCORES = {
@@ -158,7 +158,7 @@ def compute_bias():
 
     # 필수 컬럼 확인
     if "framing_label" not in df.columns:
-        raise ValueError("framing_label 컬럼이 없습니다. auto_label.py를 먼저 실행하세요.")
+        raise ValueError("framing_label 컬럼이 없습니다. llm_label.py를 먼저 실행하세요.")
     if "sentiment_score" not in df.columns:
         raise ValueError("sentiment_score 컬럼이 없습니다. sentiment_score.py를 먼저 실행하세요.")
 
@@ -191,14 +191,14 @@ def compute_bias():
         + beta * df["sentiment_score"]
         + gamma * df["keyword_polarity"]
     )
-    # 정규화: 원시 범위 약 [-1.4, +1.4] → [-3, +3]으로 스케일링
-    raw_max = alpha * 2 + beta * 1 + gamma * 1  # 1.4
+    # 정규화: 세 성분 모두 [-1, +1] → 원시 범위 [-(α+β+γ), +(α+β+γ)] = [-1, +1] → [-3, +3]
+    raw_max = alpha + beta + gamma  # 1.0
     df["bias_score"] = (df["bias_score"] / raw_max * 3).clip(-3, 3).round(4)
 
     # 결과 저장
     out_cols = [c for c in [
         "article_id", "title", "title_clean",
-        "framing_label", "confidence",
+        "framing_label", "framing_label_kr", "confidence",
         "sentiment_score", "sentiment_label",
         "keyword_polarity", "bias_score",
         "media_name", "media_group", "event_type", "date",
