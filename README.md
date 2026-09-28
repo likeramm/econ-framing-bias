@@ -71,7 +71,7 @@
 | 주가·지수 | **34,666행** · 14종목 (KOSPI/KOSDAQ, 섹터 ETF, 개별주) | 2016-01 ~ 2026-03 | pykrx |
 | 경제 지표 | **984건** · 6종 (기준금리, CPI, CCSI, 경상수지, 환율, 생산지수) | 2016-01 ~ 2026-03 | 한국은행 ECOS |
 | 수동 라벨 | 3,262건 | — | 직접 라벨링 |
-| 자동 라벨 | 13,886건 | — | self-training |
+| LLM 라벨 | 13,268건 | — | gpt-5.5 (Batch API) |
 
 뉴스 기사의 **98%** 가 주가 데이터 기간과 겹칩니다.
 
@@ -111,22 +111,16 @@ Bias = α·F + β·S + γ·K   (α=0.40, β=0.35, γ=0.25)
 
 ## 파이프라인과 실행 상태
 
-코드가 있다고 실행된 것은 아닙니다. 현재 6단계에서 멈춰 있습니다.
-
 ```
 [1] 뉴스 수집          ✅ 실행 완료   14,135건
 [2] 전처리·이벤트 매칭  ✅ 실행 완료
-[3] 수동 시드 라벨링    ✅ 실행 완료   3,262건
-[4] 프레이밍 모델 학습  ✅ 실행 완료   Macro F1 0.74 (6분류)
-[5] 자동 라벨링        ✅ 실행 완료   13,886건
-────────────────── 여기까지 산출물 존재 ──────────────────
-[6] 감성 점수 산출      ⚠️ 코드만     모델은 학습됨, 전체 추론 미실행
-[7] Bias Score 산출    ⚠️ 코드만
-[8] 통계 분석 4종      ⚠️ 코드만     bias_score 없어 실행 불가
-[9] 웹 대시보드        ⚠️ 스캐폴딩    Django/React 골격만
+[3] LLM 라벨링         ✅ 실행 완료   13,268건 (gpt-5.5 Batch API, 3분류)
+[4] 프레이밍 모델 학습  ✅ 실행 완료   Test Macro F1 0.84 (LLM 라벨 증류, 3분류)
+[5] 감성 점수 산출      ✅ 실행 완료   KcELECTRA
+[6] Bias Score 산출    ✅ 실행 완료   data/labeled/bias_scored.csv
+[7] 통계 분석 4종      ✅ 실행 완료   data/analysis_results/analysis_results.json
+[8] 웹 대시보드        🟡 일부 구현   기사 탐색 · 실시간 분류
 ```
-
-병목은 [6]입니다. `sentiment_score.py` → `compute_bias.py` → `run_analysis.py` 순으로 실행하면 뒷단이 한 번에 뚫립니다.
 
 ## 평가자 간 신뢰도(IAA) 측정 — 진행 중
 
@@ -185,7 +179,7 @@ Bias = α·F + β·S + γ·K   (α=0.40, β=0.35, γ=0.25)
 │   ├── build_goldset.py     IAA 표본 추출
 │   └── run_analysis.py      통계 분석 4종 실행
 ├── models/
-│   ├── framing/best/        학습 완료 (현재 6분류)
+│   ├── framing/best/        학습 완료 (3분류, LLM 라벨 증류)
 │   └── sentiment/best/      학습 완료
 ├── data/
 │   ├── processed/           dataset.csv · stock_data.csv · economic_indicators.csv
@@ -216,25 +210,42 @@ python run_crawl.py                  # 뉴스 크롤링
 python src/collection/ecos_client.py # 경제지표
 python build_dataset.py              # 전처리·통합
 
-# 모델
-python scripts/train_framing.py      # 프레이밍 분류 학습
-python scripts/auto_label.py         # 자동 라벨링
-python scripts/llm_label.py --dry-run  # LLM 라벨링 비용 추정
+# 라벨링·모델
+python scripts/llm_label.py --dry-run     # LLM 라벨링 비용 추정
+python scripts/llm_label.py --batch auto  # Batch API 로 전체 라벨링
+python scripts/train_framing.py           # LLM 라벨로 프레이밍 모델 학습
 
-# 분석 (아직 미실행 — 순서대로 실행 필요)
+# 분석 (순서대로)
 python scripts/sentiment_score.py
 python scripts/compute_bias.py
 python scripts/run_analysis.py
 ```
 
+### 대시보드
+
+```bash
+# 백엔드 (Django) — 최초 1회 DB 생성·데이터 적재
+cd backend
+python manage.py migrate
+python manage.py load_articles       # bias_scored.csv 등 → DB
+python manage.py runserver 8001
+
+# 프론트엔드 (React) — 다른 터미널에서
+cd frontend
+npm install
+REACT_APP_API_URL=http://localhost:8001/api npm start   # http://localhost:3000
+```
+
+실시간 분류는 학습된 가중치(`models/framing/best/model.safetensors`, git 미포함)가 있어야 동작합니다.
+
 ## 남은 작업
 
-- [ ] 3분류 전환 — 모델 head와 `FRAMING_SCORES` 매핑이 아직 6분류
+- [x] 3분류 전환 — LLM 라벨링, 모델 학습, `FRAMING_SCORES`
 - [ ] IAA 측정 완료 (평가자 2인 × 150건) → Gold Set 확정
 - [ ] Bias Score 가중치 3중 검증
-- [ ] 파이프라인 [6]~[8] 실행 및 결과 도출
+- [x] 파이프라인 감성 점수 → Bias Score → 통계 분석 실행
 - [ ] 매체 간 프레이밍 비교 분석 (RQ1·RQ2)
-- [ ] 웹 대시보드 구현
+- [ ] 웹 대시보드 — 개요·매체 비교·시계열 화면 추가
 - [ ] 최종 보고서
 
 ## 참고문헌
