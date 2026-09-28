@@ -79,7 +79,8 @@ class GrangerCausalityTest:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             try:
-                gc_results = grangercausalitytests(data, maxlag=self.max_lag, verbose=False)
+                # statsmodels 0.15에서 verbose 인자 제거됨
+                gc_results = grangercausalitytests(data, maxlag=self.max_lag)
             except Exception as e:
                 return {
                     "n_obs": len(df),

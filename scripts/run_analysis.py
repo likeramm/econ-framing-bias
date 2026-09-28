@@ -35,7 +35,7 @@ from src.analysis.panel_regression import PanelRegression
 # 설정
 # ══════════════════════════════════════════════════════════
 PATHS = {
-    "bias_data": "data/labeled/auto_labeled_full.csv",
+    "bias_data": "data/labeled/bias_scored.csv",
     "stock_data": "data/processed/stock_data.csv",
     "economic_indicators": "data/processed/economic_indicators.csv",
     "dataset": "data/processed/dataset.csv",
@@ -154,24 +154,29 @@ def run_event_study(df_bias, df_stock, df_econ):
     )
 
     # KOSPI 수익률 (시장 벤치마크)
-    kospi = df_stock[df_stock["ticker"] == "KOSPI"].sort_values("date").reset_index(drop=True)
+    kospi = df_stock[df_stock["ticker"] == "KOSPI"][["date", "return"]]
     if len(kospi) == 0:
         print("  KOSPI 데이터 없음 → 건너뜀")
         return {}
 
-    market_returns = kospi["return"].astype(float)
-    kospi_dates = kospi["date"]
-
     results = {}
 
     for event_type, ticker in EVENT_TICKER_MAP.items():
-        # 해당 티커의 수익률
-        stock_df = df_stock[df_stock["ticker"] == ticker].sort_values("date").reset_index(drop=True)
+        # 해당 티커의 수익률 — 시장 수익률과 '날짜'로 정렬 (행 번호로 맞추면 거래일 수가 다른
+        # 티커끼리 서로 다른 날짜의 수익률을 비교하게 됨)
+        stock_df = (
+            df_stock[df_stock["ticker"] == ticker][["date", "return"]]
+            .merge(kospi, on="date", how="inner", suffixes=("", "_mkt"))
+            .sort_values("date")
+            .reset_index(drop=True)
+        )
         if len(stock_df) < 150:
             continue
 
         stock_returns = stock_df["return"].astype(float)
         stock_dates = stock_df["date"]
+        # KOSPI 자체가 대상이면 시장 모형 대신 평균조정 모형 (시장 모형이면 AR ≡ 0)
+        market_returns = None if ticker == "KOSPI" else stock_df["return_mkt"].astype(float)
 
         # 해당 이벤트의 기사가 급증한 날 = 이벤트 발생일로 추정
         event_articles = df_bias[df_bias["event_type"] == event_type].copy()
@@ -376,11 +381,15 @@ def run_panel_regression(df_bias, df_stock):
         return {}
 
     # 고정효과 패널 회귀
+    # 종속변수(월별 KOSPI 수익률)가 모든 언론사에 공통 → Time FE를 넣으면 변동이 전부 흡수됨.
+    # 언론사 FE만 두고 표준오차는 월 단위 군집화.
+    print("  모형: 언론사 고정효과 (월별 KOSPI 수익률이 언론사 공통이라 시간 FE 제외, 월 군집 표준오차)")
     try:
         result = pr.run_fixed_effects(
             panel_data=panel,
             dependent="stock_return",
             independents=["bias_score", "sentiment_score"],
+            time_effects=False,
         )
 
         print(f"\n  R² (within): {result['r2_within']:.4f}")

@@ -40,9 +40,13 @@ class EventStudy:
         추정 기간 데이터로 α, β를 추정하고,
         이벤트 윈도우에서 AR = R_i - (α + β × R_m) 계산.
 
+        market_returns가 None이면 평균조정 모형(MacKinlay, 1997)을 사용한다:
+        AR = R_i - mean(R_i, 추정 기간). 분석 대상이 시장 지수 자체(KOSPI)일 때
+        시장 모형을 쓰면 AR이 항상 0이 되므로 이 경우에 사용한다.
+
         Args:
             stock_returns: 개별 주식 수익률 시계열
-            market_returns: 시장(KOSPI) 수익률 시계열
+            market_returns: 시장(KOSPI) 수익률 시계열 (stock_returns와 날짜 정렬됨) 또는 None
             event_date_idx: 이벤트 날짜의 정수 인덱스
 
         Returns:
@@ -56,6 +60,15 @@ class EventStudy:
         # 범위 체크
         if est_start < 0 or evt_end >= len(stock_returns):
             return None
+
+        # 평균조정 모형 (시장 지수 자체가 분석 대상일 때)
+        if market_returns is None:
+            est_stock = stock_returns.iloc[est_start : est_end + 1].dropna()
+            if len(est_stock) < 30:
+                return None
+            ar = stock_returns.iloc[evt_start : evt_end + 1] - est_stock.mean()
+            ar.index = range(self.event_window[0], self.event_window[0] + len(ar))
+            return ar
 
         # 추정 기간 데이터
         est_stock = stock_returns.iloc[est_start : est_end + 1].values

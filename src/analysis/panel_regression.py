@@ -14,11 +14,18 @@ class PanelRegression:
     """언론사 × 시간 패널 데이터 회귀분석"""
 
     def run_fixed_effects(
-        self, panel_data: pd.DataFrame, dependent: str, independents: list[str]
+        self, panel_data: pd.DataFrame, dependent: str, independents: list[str],
+        time_effects: bool = True,
     ) -> dict:
-        """고정효과 패널 회귀분석 (Entity + Time FE)
+        """고정효과 패널 회귀분석 (Entity FE, 선택적으로 Time FE)
+
+        종속변수가 시간에만 따라 변하고 모든 entity에 공통이면(예: 월별 KOSPI 수익률)
+        Time FE가 종속변수 변동을 전부 흡수해 추정이 불가능하다. 이 경우
+        time_effects=False로 두고, 같은 시점의 관측치가 공통 충격을 공유하므로
+        표준오차를 시간 기준으로 군집화한다.
 
         Args:
+            time_effects: 시간 고정효과 포함 여부
             panel_data: 패널 데이터프레임.
                         MultiIndex (entity, time) 또는
                         entity_col, time_col을 포함해야 함.
@@ -55,9 +62,12 @@ class PanelRegression:
         y = df[dependent]
         X = df[independents]
 
-        # Entity Fixed Effects (언론사 고정효과)
-        model = PanelOLS(y, X, entity_effects=True, time_effects=True, check_rank=False)
-        result = model.fit(cov_type="clustered", cluster_entity=True)
+        # Entity Fixed Effects (언론사 고정효과) + 선택적 Time FE
+        model = PanelOLS(y, X, entity_effects=True, time_effects=time_effects, check_rank=False)
+        if time_effects:
+            result = model.fit(cov_type="clustered", cluster_entity=True)
+        else:
+            result = model.fit(cov_type="clustered", cluster_time=True)
 
         # 결과 정리
         coef_dict = {}
